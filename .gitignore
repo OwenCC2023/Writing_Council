@@ -1,0 +1,10 @@
+.env
+Claude API Key*
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
