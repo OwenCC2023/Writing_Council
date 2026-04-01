@@ -2,16 +2,25 @@ from orchestrator import WritingCouncil
 from document_writer import save_as_manuscript
 
 # --- Story configuration ---
-TITLE = "Your Story Title"
-AUTHOR = "Your Name"
+TITLE = "The Sforzato"
+AUTHOR = "Owen Cardwell-Copenhefer"
 
 council = WritingCouncil()
 result = council.run(
-    idea="Your story idea here",
-    target_length="5000 words",
+    idea="""
+    A space-opera set in a distant part of the galaxy with centuries of human habitation. A great empire is in the process of falling,
+    remaking itself into a Republic through a civil war. So far it has been a long and bloody affair, but the tide has finally turned in
+    the Republican's favor. Or did it?
+    
+    The now-outnumbered Imperial side just got a new Fleet Admiral, Admiral Quent. Instead of pausing to consolidate 
+    his forces Admiral Quent launches a bold counteroffensive known as The Sforzato. Republican forces were pushed back, losing several 
+    pivotal battles. Then came the battle of Frankfurt im Weltraum where Republican forces regained the initiative by being in the 
+    right place at the right time for entirely the wrong reasons.
+    """,
+    target_length="45,000 words",
     target_audience="Adult sci-fi readers",
-    world_rules="Any rules that differ from our world",  # optional
-    framework="Three-act structure",                     # optional
+    world_rules="Actually none. I want pure hard sci-fi here. Make it conform to known physics, just in the future.",  # optional
+    framework="",                     # optional
 )
 
 # Save the finished story as a manuscript Word document
