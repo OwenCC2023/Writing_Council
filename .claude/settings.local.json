@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.py$|orchestrator\")",
+      "Bash(grep -r 'class WritingCouncil' . --include=*.py)",
+      "Bash(git pull:*)",
+      "Bash(.venv/Scripts/pip.exe install:*)",
+      "Bash(.venv/Scripts/python.exe document_writer.py)"
+    ]
+  }
+}

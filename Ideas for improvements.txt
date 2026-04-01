@@ -1,0 +1,5 @@
+Add a Character agent:
+	We want an agent for each character that the writer can query with the context and situation.
+	The WriterAgent would need to be able to spin these up on its own. --ONLY FOR IMPORTANT, RECURRING CHARACTERS.
+	Advocates on its own behalf for a well-defined character with impact on the story.
+	Enforces character consistency, or a specific growth arc as identified by the WriterAgent at inception.

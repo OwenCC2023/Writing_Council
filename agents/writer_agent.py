@@ -84,10 +84,6 @@ class WriterAgent(BaseAgent):
             f"ORIGINAL PLAN:\n{plan}\n\n"
             f"CURRENT DRAFT:\n{story}\n\n"
             f"FEEDBACK TO ADDRESS:\n{full_feedback}\n\n"
-        user_prompt = (
-            f"ORIGINAL PLAN:\n{plan}\n\n"
-            f"CURRENT DRAFT:\n{story}\n\n"
-            f"FEEDBACK TO ADDRESS:\n{feedback}\n\n"
             "Produce a revised draft that addresses this feedback."
         )
         output = self._call_claude(REVISION_SYSTEM_PROMPT, user_prompt)
