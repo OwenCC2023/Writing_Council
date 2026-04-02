@@ -1,3 +1,5 @@
+import re
+
 from .base_agent import BaseAgent
 
 SYSTEM_PROMPT = """\
@@ -17,20 +19,35 @@ If a basic framework is provided, honor its structure.\
 """
 
 REVISION_PLAN_SYSTEM_PROMPT = """\
-You are a story architect synthesizing feedback from multiple reviewers into a clear, \
-actionable revision plan for a writer.
+You are a story architect synthesizing feedback from multiple reviewers into a \
+structured revision plan for a writer.
 
-Your job:
-1. Read each piece of feedback carefully.
-2. Identify which feedback items conflict with each other or with the original plan. \
-   Resolve conflicts by choosing the approach that best serves narrative integrity and \
-   the original vision.
-3. Merge non-conflicting feedback into a unified, prioritized list of revision actions.
-4. For each action, state exactly what to change, where it occurs, and why the change \
-   improves the story.
+The current draft uses section markers of the form <<<SECTION N>>>. All revision \
+instructions must reference sections by their current marker number as it appears \
+in the draft.
 
-Output a numbered list of specific revision actions. Be concrete enough that a writer \
-knows precisely what to do without further interpretation. Do not include vague suggestions.\
+Your output MUST follow this exact format — no text outside these three blocks:
+
+=== STRUCTURAL OPERATIONS ===
+One per line. Valid forms only:
+  MOVE N AFTER M   — moves section N to immediately after section M
+  MERGE N M        — merges section N with the immediately following section (M must equal N+1)
+Write NONE if no structural changes are needed.
+
+=== SECTION REVISIONS ===
+One per line:
+  SECTION N: [specific instruction for what to change and why]
+Only include sections that need content changes.
+
+=== GENERAL NOTES ===
+Feedback that cannot map to a specific section (overall tone, pacing, voice).
+Write NONE if nothing applies.
+
+Rules:
+- Resolve conflicts between reviewers; favour narrative integrity and the original vision.
+- Be concrete: state what to change, where, and why it improves the story.
+- MOVE and MERGE are applied automatically in Python — only specify them when the \
+  structural change alone is the improvement needed, not a content rewrite.\
 """
 
 
@@ -56,24 +73,31 @@ class PlanningAgent(BaseAgent):
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:
-        """Synthesize feedback from multiple reviewers into an actionable revision plan.
+        """Synthesize feedback from multiple reviewers into a structured revision plan.
 
         Args:
-            story: The current draft.
+            story: The current draft (may contain <<<SECTION N>>> markers).
             plan: The original narrative plan the story was built from.
             feedbacks: List of feedback strings from different reviewer agents.
 
         Returns:
-            A dict with 'agent' and 'output' keys; output is a numbered revision plan.
+            A dict with 'agent' and 'output' keys; output is the three-block structured plan.
         """
         numbered = "\n\n".join(
             f"[Reviewer {i + 1}]\n{f}" for i, f in enumerate(feedbacks)
         )
+        section_nums = sorted(int(m) for m in re.findall(r'<<<SECTION\s+(\d+)>>>', story))
+        section_list = (
+            f"Current sections in draft: {', '.join(str(n) for n in section_nums)}"
+            if section_nums
+            else "Current sections in draft: (no section markers found)"
+        )
         user_prompt = (
             f"ORIGINAL PLAN:\n{plan}\n\n"
             f"CURRENT DRAFT:\n{story}\n\n"
+            f"{section_list}\n\n"
             f"FEEDBACK FROM MULTIPLE REVIEWERS:\n{numbered}\n\n"
-            "Produce a clear, actionable revision plan for the writer."
+            "Produce a structured revision plan using the exact format specified."
         )
         output = self._call_claude(REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
