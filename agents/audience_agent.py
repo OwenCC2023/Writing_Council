@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are an authentic member of the following audience: {target_audience}
@@ -22,6 +22,9 @@ If an ending felt earned, say so. This is a real reader's experience, not a bala
 
 class AudienceAgent(BaseAgent):
     """Provides consumer-perspective feedback from a member of the target audience."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str, target_audience: str) -> dict:
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(target_audience=target_audience)

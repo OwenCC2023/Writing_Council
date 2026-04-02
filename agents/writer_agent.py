@@ -95,7 +95,7 @@ class WriterAgent(BaseAgent):
         )
         output = self._call_claude(SYSTEM_PROMPT, user_prompt,
                                    max_tokens=INITIAL_WRITE_MAX_TOKENS)
-        return {"agent": "WriterAgent", "output": output}
+        return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
     def revise(self, plan: str, story: str, feedback: str) -> dict:
         sections = self._parse_sections(story)
@@ -106,7 +106,7 @@ class WriterAgent(BaseAgent):
                 REVISION_FALLBACK_SYSTEM_PROMPT,
                 self._build_fallback_prompt(plan, story, feedback),
             )
-            return {"agent": "WriterAgent", "output": output}
+            return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
         structural_ops, section_revisions, general_notes = self._parse_revision_plan(feedback)
 
@@ -115,6 +115,7 @@ class WriterAgent(BaseAgent):
             sections = self._apply_structural_ops(sections, structural_ops)
 
         # Revise only the sections that have specific instructions.
+        revised_section_nums = None  # None = full check required
         if section_revisions:
             valid = {k: v for k, v in section_revisions.items() if k in sections}
             if valid:
@@ -124,6 +125,10 @@ class WriterAgent(BaseAgent):
                 raw = self._call_claude(REVISION_SYSTEM_PROMPT, prompt)
                 revised = self._parse_sections(raw)
                 sections = self._apply_section_revisions(sections, revised)
+                # Only set revised_section_nums if there were no structural ops that
+                # rearranged context (structural ops warrant a full re-check).
+                if not structural_ops:
+                    revised_section_nums = sorted(valid.keys())
 
         # General notes that can't map to sections — full-story fallback for this pass.
         if general_notes:
@@ -134,8 +139,10 @@ class WriterAgent(BaseAgent):
             )
             parsed = self._parse_sections(output)
             sections = parsed if parsed else sections  # keep old sections if markers dropped
+            revised_section_nums = None  # full rewrite; full check required
 
-        return {"agent": "WriterAgent", "output": self._rebuild_story(sections)}
+        return {"agent": "WriterAgent", "output": self._rebuild_story(sections),
+                "revised_sections": revised_section_nums}
 
     # ------------------------------------------------------------------
     # Section parsing and rebuilding

@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT = """\
 You are a demanding literary editor. Your standard is high and your patience for weak work \
@@ -26,6 +26,9 @@ present comfort.\
 
 class EditorAgent(BaseAgent):
     """Reviews the story for strengths and weaknesses with concrete improvement advice. Critical eye."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str) -> dict:
         user_prompt = (

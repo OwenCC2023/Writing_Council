@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT = """\
 You are a rival author reviewing another writer's work. You have your own strong aesthetic \
@@ -20,6 +20,9 @@ say so and offer a different one.\
 
 class PeerWriterAgent(BaseAgent):
     """Offers alternative framings and approaches to weak areas. Critical eye."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, plan: str, story: str) -> dict:
         user_prompt = (
