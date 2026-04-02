@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT = """\
 You are a skeptical continuity editor. Your default assumption is that something is wrong \
@@ -37,6 +37,9 @@ and explain what information in the text contradicts it.\
 
 class ConsistencyAgent(BaseAgent):
     """Reviews a story for internal consistency — timeline, character, and logic. Critical eye."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str) -> dict:
         user_prompt = f"STORY:\n{story}\n\nReview this story for all internal consistency problems."

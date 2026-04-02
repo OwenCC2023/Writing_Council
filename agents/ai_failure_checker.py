@@ -1,5 +1,5 @@
 from pathlib import Path
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 DEFAULT_FAILURE_MODES_PATH = Path(__file__).parent.parent / "ai_writing_failure_modes.md"
 
@@ -25,6 +25,9 @@ Prioritize accuracy over comprehensiveness — only flag what is genuinely prese
 
 class AIFailureCheckerAgent(BaseAgent):
     """Reviews a story against the AI writing failure modes reference document."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str, failure_modes_path: str | Path = None) -> dict:
         path = Path(failure_modes_path) if failure_modes_path else DEFAULT_FAILURE_MODES_PATH

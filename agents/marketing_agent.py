@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT = """\
 You are a commercial publishing strategist. You understand how books find their readers, \
@@ -22,6 +22,9 @@ this genre who respond well to competence narratives" is useful.\
 
 class MarketingAgent(BaseAgent):
     """Reviews the story for commercial appeal to its identified target audience."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str, target_audience: str) -> dict:
         user_prompt = (
