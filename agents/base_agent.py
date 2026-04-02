@@ -15,11 +15,17 @@ class BaseAgent:
         self.model = model
         self.client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    def _call_claude(self, system_prompt: str, user_prompt: str, model: str = None) -> str:
+    def _call_claude(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: str = None,
+        max_tokens: int = 8192,
+    ) -> str:
         """Send a prompt to Claude and return the text response."""
         response = self.client.messages.create(
             model=model or self.model,
-            max_tokens=8192,
+            max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
