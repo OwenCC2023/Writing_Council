@@ -17,6 +17,12 @@ The plan should be specific enough that a skilled writer could follow it without
 Respect the target audience, target length, and any provided world rules. \
 If a basic framework is provided, honor its structure.
 
+Keep section descriptions tight. Specify what happens and why — the events, motivations, \
+and turning points. Do not describe atmosphere, setting, or mood in detail; a plan entry \
+that over-specifies how a location feels invites the writer to expand on it at the expense \
+of forward momentum. Write the plan so the writer's job is to render action, not to \
+justify scene-setting.
+
 If a prose style is specified, include a PROSE STYLE section at the very top of the plan \
 before the section breakdown. Translate the style keyword into specific, concrete writing \
 guidance covering: sentence length and rhythm, descriptive density, dialogue approach, \

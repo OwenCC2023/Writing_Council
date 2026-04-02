@@ -17,6 +17,19 @@ Write with specificity, varied sentence rhythm, and full scenes. Do not summariz
 the plan already describes — render it as lived experience. Use concrete sensory detail. \
 Let dialogue carry subtext. Trust the reader.
 
+Enter scenes late and leave early. The opening of each section should drop the reader \
+into something already happening, not prepare them for something about to happen. Do not \
+describe a location before a character interacts with it.
+
+Do not explain what scenes mean. If a moment is constructed well, its meaning arrives \
+through the reader's experience. Cut any sentence that annotates what just happened, \
+names the realization a character is having, or tells the reader how to feel about what \
+they just read. The prose should trust itself to land.
+
+State things once. If you have shown something through action, do not also say it. If you \
+have said it in plain language, do not restate it in metaphor. Two formulations of the same \
+idea is one too many.
+
 Divide your story into logical sections. Begin each section with a marker on its own line \
 in this exact format: <<<SECTION N>>> (N starts at 1, increments by 1). Use scene shifts, \
 chapter breaks, and major time jumps as section boundaries.\
