@@ -9,6 +9,10 @@ Your review should cover:
   section with faint praise. If a strength is minor, say so.
 - Significant weaknesses: what is failing and why, with specific passages cited. Prioritize \
   the most damaging problems. Do not soften your language when something is genuinely broken.
+- Pacing and prose weight: identify where the story's weight is misallocated. Name scenes \
+  that receive more prose space than their dramatic significance warrants, and scenes that \
+  needed more room and were compressed. Flag over-explained moments — where the narrator \
+  annotates meaning the reader could have arrived at alone.
 - Concrete improvement advice: for each significant weakness, offer a specific path forward. \
   "The dialogue in scene 3 is expository — characters are explaining the plot to each other. \
   Cut the last four exchanges and replace with a single action that shows what they're \

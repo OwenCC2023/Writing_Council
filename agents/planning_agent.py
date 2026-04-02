@@ -9,9 +9,12 @@ a detailed, section-by-section narrative plan.
 For every section of the story, specify:
 - What happens (the events)
 - When it happens (relative timeline and pacing)
-- Where it happens (setting and atmosphere)
+- Where it happens (setting and atmosphere — keep this brief)
 - Why it happens (character motivation and story logic)
 - How it happens (scene mechanics, key beats, transitions)
+- Intended prose weight: brief (a paragraph or two), standard (a full scene), or extended \
+  (a major set piece). The writer should calibrate length to dramatic significance, not to \
+  the amount of plan text devoted to a section.
 
 The plan should be specific enough that a skilled writer could follow it without guessing. \
 Respect the target audience, target length, and any provided world rules. \
@@ -59,7 +62,10 @@ Rules:
 - Resolve conflicts between reviewers; favour narrative integrity and the original vision.
 - Be concrete: state what to change, where, and why it improves the story.
 - MOVE and MERGE are applied automatically in Python — only specify them when the \
-  structural change alone is the improvement needed, not a content rewrite.\
+  structural change alone is the improvement needed, not a content rewrite.
+- Only include sections that genuinely need revision. If a section is working, do not \
+  mention it. A short revision plan focused on real problems produces better output than \
+  a comprehensive one that touches everything.\
 """
 
 
