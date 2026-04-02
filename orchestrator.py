@@ -65,6 +65,7 @@ class WritingCouncil:
         target_audience: str,
         world_rules: str = "",
         framework: str = "",
+        style: str = "",
     ) -> dict:
         """Run the full outer loop: Inner → Middle."""
         self._log = []
@@ -82,6 +83,7 @@ class WritingCouncil:
             target_audience=target_audience,
             world_rules=world_rules,
             framework=framework,
+            style=style,
             label="outer.inner",
         )
 
@@ -109,6 +111,7 @@ class WritingCouncil:
         target_audience: str = None,
         world_rules: str = "",
         framework: str = "",
+        style: str = "",
         plan: str = None,
         story: str = None,
         middle_feedbacks: list = None,
@@ -123,7 +126,8 @@ class WritingCouncil:
                 f"idea: {idea}\ntarget_length: {target_length}\n"
                 f"target_audience: {target_audience}\n"
                 f"world_rules: {world_rules or '(none)'}\n"
-                f"framework: {framework or '(none)'}"
+                f"framework: {framework or '(none)'}\n"
+                f"style: {style or '(none)'}"
             )
             self._log_start(f"{label}.plan", "PlanningAgent", input_text)
             result = self.planner.run(
@@ -132,6 +136,7 @@ class WritingCouncil:
                 target_audience=target_audience,
                 world_rules=world_rules,
                 framework=framework,
+                style=style,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]

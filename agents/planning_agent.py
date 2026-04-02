@@ -15,7 +15,13 @@ For every section of the story, specify:
 
 The plan should be specific enough that a skilled writer could follow it without guessing. \
 Respect the target audience, target length, and any provided world rules. \
-If a basic framework is provided, honor its structure.\
+If a basic framework is provided, honor its structure.
+
+If a prose style is specified, include a PROSE STYLE section at the very top of the plan \
+before the section breakdown. Translate the style keyword into specific, concrete writing \
+guidance covering: sentence length and rhythm, descriptive density, dialogue approach, \
+tonal register, and what to avoid. A skilled writer should be able to follow this guidance \
+without further clarification.\
 """
 
 REVISION_PLAN_SYSTEM_PROMPT = """\
@@ -61,12 +67,15 @@ class PlanningAgent(BaseAgent):
         target_audience: str,
         world_rules: str = "",
         framework: str = "",
+        style: str = "",
     ) -> dict:
         user_prompt = f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
         if world_rules:
             user_prompt += f"\n\nWORLD RULES (deviations from our world):\n{world_rules}"
         if framework:
             user_prompt += f"\n\nBASIC FRAMEWORK:\n{framework}"
+        if style:
+            user_prompt += f"\n\nPROSE STYLE: {style}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
         output = self._call_claude(SYSTEM_PROMPT, user_prompt)
