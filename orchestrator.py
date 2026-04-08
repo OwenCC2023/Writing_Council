@@ -66,8 +66,21 @@ class WritingCouncil:
         world_rules: str = "",
         framework: str = "",
         style: str = "",
+        image: str = "",
     ) -> dict:
-        """Run the full outer loop: Inner → Middle."""
+        """Run the full outer loop: Inner → Middle.
+
+        Args:
+            idea: The story concept or premise.
+            target_length: Desired word count (e.g. "8,000 words").
+            target_audience: Intended readership.
+            world_rules: Optional text describing deviations from the real world.
+            framework: Optional structural template (e.g. "Short Story").
+            style: Optional prose style keyword.
+            image: Optional path to a local image file or an http/https URL. When
+                provided, the PlanningAgent will examine the image and deduce the
+                world's rules from its visual content before constructing the plan.
+        """
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -84,6 +97,7 @@ class WritingCouncil:
             world_rules=world_rules,
             framework=framework,
             style=style,
+            image=image,
             label="outer.inner",
         )
 
@@ -112,6 +126,7 @@ class WritingCouncil:
         world_rules: str = "",
         framework: str = "",
         style: str = "",
+        image: str = "",
         plan: str = None,
         story: str = None,
         middle_feedbacks: list = None,
@@ -127,7 +142,8 @@ class WritingCouncil:
                 f"target_audience: {target_audience}\n"
                 f"world_rules: {world_rules or '(none)'}\n"
                 f"framework: {framework or '(none)'}\n"
-                f"style: {style or '(none)'}"
+                f"style: {style or '(none)'}\n"
+                f"image: {image or '(none)'}"
             )
             self._log_start(f"{label}.plan", "PlanningAgent", input_text)
             result = self.planner.run(
@@ -137,6 +153,7 @@ class WritingCouncil:
                 world_rules=world_rules,
                 framework=framework,
                 style=style,
+                image=image,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
