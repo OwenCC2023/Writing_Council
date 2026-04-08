@@ -33,6 +33,24 @@ tonal register, and what to avoid. A skilled writer should be able to follow thi
 without further clarification.\
 """
 
+IMAGE_PROMPT_ADDENDUM = """\
+
+An image has been provided as part of the initial prompt. Before producing the plan, \
+include a WORLD DEDUCTION section at the very top (before any PROSE STYLE section). \
+In this section:
+- Examine every visible detail of the image — architecture, technology, clothing, \
+  lighting, materials, social organisation, flora/fauna, scale, and any text or symbols.
+- Deduce the underlying rules of this world from what is shown: era, technological level, \
+  power structures, physical laws that appear to differ from our own, cultural norms, \
+  and aesthetic conventions.
+- Extrapolate what is implied but not directly visible — if the image shows a skyline, \
+  infer transportation; if it shows a crowd, infer hierarchy.
+- State each deduced rule as a concrete, usable fact (e.g. "Gravity appears lower than \
+  Earth-normal — structures are impossibly tall and spindly", not "the world looks unusual").
+These deductions become the authoritative world rules for the plan that follows, \
+supplementing — and where they conflict, overriding — any world rules provided in text.\
+"""
+
 REVISION_PLAN_SYSTEM_PROMPT = """\
 You are a story architect synthesizing feedback from multiple reviewers into a \
 structured revision plan for a writer.
@@ -80,6 +98,7 @@ class PlanningAgent(BaseAgent):
         world_rules: str = "",
         framework: str = "",
         style: str = "",
+        image: str = "",
     ) -> dict:
         user_prompt = f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
         if world_rules:
@@ -90,7 +109,12 @@ class PlanningAgent(BaseAgent):
             user_prompt += f"\n\nPROSE STYLE: {style}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
+        system_prompt = SYSTEM_PROMPT + (IMAGE_PROMPT_ADDENDUM if image else "")
+
+        if image:
+            output = self._call_claude_with_image(system_prompt, user_prompt, image)
+        else:
+            output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:

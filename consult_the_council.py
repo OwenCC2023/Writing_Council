@@ -21,13 +21,15 @@ result = council.run(
     target_length="8,000 words",
     target_audience="Adult sci-fi readers",
     world_rules="""
-    Hyperlanes exist between star systems, allowing for faster-than-light travel, but only between certain systems. 
+    Hyperlanes exist between star systems, allowing for faster-than-light travel, but only between certain systems.
     This gives the region a geography - choke points, dead-ends, and crossroads. FTL communication is only possible through a network of relay stations, which are vulnerable to attack and sabotage.
 
     Otherwise, I want pure hard sci-fi here. Make it conform to known physics, just in the future.
     """,  # optional
     framework="Short Story",                     # optional
     style=STYLE,                                 # optional
+    # image="path/to/world_reference.png",       # optional — local file or http/https URL;
+    #                                            # the planner will deduce world rules from it
 )
 
 # Save the finished story as a manuscript Word document
