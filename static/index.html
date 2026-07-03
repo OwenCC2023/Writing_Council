@@ -5,57 +5,103 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Writing Council</title>
 <style>
+  :root {
+    --bg:        #1a1a1a;
+    --bg-raised: #242424;
+    --bg-input:  #2c2c2c;
+    --border:    #444;
+    --text:      #ddd;
+    --text-muted:#888;
+    --tab-idle:  #2c2c2c;
+    --btn-run:   #c8b89a;
+    --btn-run-fg:#1a1a1a;
+    --btn-dl:    #3a7a5e;
+    --warn-bg:   #2a2500;
+    --warn-bdr:  #7a6200;
+    --err-bg:    #2a1010;
+    --err-bdr:   #7a3030;
+    --err-fg:    #e88;
+  }
+  .light {
+    --bg:        #f5f0eb;
+    --bg-raised: #fff;
+    --bg-input:  #fff;
+    --border:    #bbb;
+    --text:      #222;
+    --text-muted:#666;
+    --tab-idle:  #e8e0d8;
+    --btn-run:   #3a3a3a;
+    --btn-run-fg:#fff;
+    --btn-dl:    #2a6049;
+    --warn-bg:   #fff8e1;
+    --warn-bdr:  #f0c040;
+    --err-bg:    #fdecea;
+    --err-bdr:   #e57373;
+    --err-fg:    #c0392b;
+  }
   *, *::before, *::after { box-sizing: border-box; }
-  body { font-family: Georgia, serif; background: #f5f0eb; color: #222; margin: 0; padding: 2rem; }
+  body { font-family: Georgia, serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; }
   .container { max-width: 780px; margin: 0 auto; }
-  h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
+  .header { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  #theme-toggle {
+    margin-left: auto; padding: 0.25rem 0.7rem; font-size: 0.8rem;
+    background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 3px; cursor: pointer; font-family: inherit;
+  }
   label { display: block; font-weight: bold; margin-top: 1rem; margin-bottom: 0.25rem; font-size: 0.9rem; }
   input[type="text"], textarea {
     width: 100%; padding: 0.5rem; font-family: inherit; font-size: 0.95rem;
-    border: 1px solid #bbb; border-radius: 3px; background: #fff;
+    border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg-input); color: var(--text);
   }
   textarea { resize: vertical; min-height: 100px; }
-  .optional { font-weight: normal; color: #666; font-size: 0.8rem; margin-left: 0.4rem; }
+  .optional { font-weight: normal; color: var(--text-muted); font-size: 0.8rem; margin-left: 0.4rem; }
   .tabs { display: flex; margin-top: 1rem; }
   .tab-btn {
-    padding: 0.4rem 1rem; border: 1px solid #bbb; background: #e8e0d8;
-    cursor: pointer; font-size: 0.9rem; border-radius: 3px 3px 0 0;
+    padding: 0.4rem 1rem; border: 1px solid var(--border); background: var(--tab-idle);
+    color: var(--text); cursor: pointer; font-size: 0.9rem; border-radius: 3px 3px 0 0;
     font-family: inherit;
   }
-  .tab-btn.active { background: #fff; border-bottom-color: #fff; }
-  .tab-panel { border: 1px solid #bbb; padding: 0.75rem; background: #fff; border-radius: 0 3px 3px 3px; }
+  .tab-btn.active { background: var(--bg-input); border-bottom-color: var(--bg-input); }
+  .tab-panel { border: 1px solid var(--border); padding: 0.75rem; background: var(--bg-input); border-radius: 0 3px 3px 3px; }
+  input[type="file"] { color: var(--text); }
   .hidden { display: none !important; }
   button[type="submit"] {
     margin-top: 1.5rem; padding: 0.6rem 1.4rem; font-size: 1rem;
-    background: #3a3a3a; color: #fff; border: none; border-radius: 3px;
+    background: var(--btn-run); color: var(--btn-run-fg); border: none; border-radius: 3px;
     cursor: pointer; font-family: inherit;
   }
-  button[type="submit"]:disabled { background: #999; cursor: not-allowed; }
+  button[type="submit"]:disabled { opacity: 0.45; cursor: not-allowed; }
   #download-btn {
     display: block; margin-top: 0.75rem; padding: 0.6rem 1.4rem; font-size: 1rem;
-    background: #2a6049; color: #fff; border: none; border-radius: 3px;
+    background: var(--btn-dl); color: #fff; border: none; border-radius: 3px;
     cursor: pointer; font-family: inherit;
   }
-  #spinner { margin-top: 1.5rem; font-style: italic; color: #555; }
+  #spinner { margin-top: 1.5rem; font-style: italic; color: var(--text-muted); }
   #output-section { margin-top: 2rem; }
   #output-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   #story-output {
     width: 100%; min-height: 400px; font-family: "Times New Roman", serif;
-    font-size: 0.95rem; padding: 0.75rem; border: 1px solid #bbb; border-radius: 3px;
+    font-size: 0.95rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg-input); color: var(--text);
   }
   .warning {
-    background: #fff8e1; border: 1px solid #f0c040; padding: 0.5rem 0.75rem;
-    border-radius: 3px; font-size: 0.85rem; margin-top: 0.75rem;
+    background: var(--warn-bg); border: 1px solid var(--warn-bdr); padding: 0.5rem 0.75rem;
+    border-radius: 3px; font-size: 0.85rem; margin-top: 0.75rem; color: var(--text);
   }
   #error-msg {
-    margin-top: 1rem; color: #c0392b; background: #fdecea;
-    border: 1px solid #e57373; padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
+    margin-top: 1rem; color: var(--err-fg); background: var(--err-bg);
+    border: 1px solid var(--err-bdr); padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Writing Council</h1>
+  <div class="header">
+    <h1>Writing Council</h1>
+    <button type="button" id="theme-toggle">Light mode</button>
+  </div>
 
   <form id="council-form" novalidate>
     <label for="title">Title *</label>
@@ -111,6 +157,16 @@
 </div>
 
 <script>
+  // --- Theme ---
+  const themeBtn = document.getElementById('theme-toggle');
+  function applyTheme(light) {
+    document.body.classList.toggle('light', light);
+    themeBtn.textContent = light ? 'Dark mode' : 'Light mode';
+    localStorage.setItem('wc-theme', light ? 'light' : 'dark');
+  }
+  applyTheme(localStorage.getItem('wc-theme') === 'light');
+  themeBtn.addEventListener('click', () => applyTheme(!document.body.classList.contains('light')));
+
   const form         = document.getElementById('council-form');
   const runBtn       = document.getElementById('run-btn');
   const spinner      = document.getElementById('spinner');
