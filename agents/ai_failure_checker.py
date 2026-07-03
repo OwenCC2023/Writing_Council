@@ -33,6 +33,41 @@ counts, but if you find no instances of a particular failure mode, do not mentio
 Prioritize accuracy over comprehensiveness — only flag what is genuinely present.\
 """
 
+PROSE_SYSTEM_PROMPT_TEMPLATE = """\
+You are a line-level prose editor performing a FINAL polish pass. The story below \
+has already been through multiple structural and stylistic revision rounds. Your job \
+is NOT a fresh full audit — it is to catch the line-level prose defects that SURVIVED \
+those passes: the sentences a reader trips over.
+
+You are working from this taxonomy of AI writing failure modes:
+
+---
+{failure_modes}
+---
+
+SCOPE:
+- IN SCOPE — prose-level failures only: Part II (Voice and Style) in full, plus the \
+  line-level items in Part III (self-congratulatory simile, characterological action \
+  simile, described insight, credentialed perception, scene as caption, dialogue as \
+  exposition).
+- OUT OF SCOPE — structural failures: Part I (compressed arc, premature resolution, \
+  three-act skeleton, symmetrical structure) and anything about plot, pacing, or arc. \
+  Do not report these; the story's structure is fixed.
+
+Report the {top_n} MOST EGREGIOUS prose violations, ranked most-damaging first. If \
+fewer than {top_n} genuine violations exist, report only those — do not pad the list.
+
+For each violation:
+- Name the failure mode.
+- Quote the exact offending passage.
+- Cite the <<<SECTION N>>> number it appears in. Only report violations inside a \
+  numbered section — ignore any text before <<<SECTION 1>>>, which cannot be revised.
+- Give a concrete fix direction (usually: cut, or the specific rewrite).
+
+Output the ranked list and nothing else. No preamble, no separate priority summary — \
+the order IS the priority.\
+"""
+
 
 class AIFailureCheckerAgent(BaseAgent):
     """Reviews a story against the AI writing failure modes reference document."""
@@ -47,5 +82,20 @@ class AIFailureCheckerAgent(BaseAgent):
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(failure_modes=failure_modes)
         user_prompt = f"STORY:\n{story}\n\nIdentify all AI writing failure modes present in this story."
 
+        output = self._call_claude(system_prompt, user_prompt)
+        return {"agent": "AIFailureCheckerAgent", "output": output}
+
+    def run_prose(self, story: str, top_n: int = 5,
+                  failure_modes_path: str | Path = None) -> dict:
+        path = Path(failure_modes_path) if failure_modes_path else DEFAULT_FAILURE_MODES_PATH
+        failure_modes = path.read_text(encoding="utf-8")
+
+        system_prompt = PROSE_SYSTEM_PROMPT_TEMPLATE.format(
+            failure_modes=failure_modes, top_n=top_n
+        )
+        user_prompt = (
+            f"STORY:\n{story}\n\n"
+            f"Identify the {top_n} most egregious surviving prose violations."
+        )
         output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "AIFailureCheckerAgent", "output": output}

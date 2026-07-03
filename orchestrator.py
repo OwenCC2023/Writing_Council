@@ -68,8 +68,10 @@ class WritingCouncil:
         framework: str = "",
         style: str = "",
         image: str = "",
+        prose_passes: int = 1,
+        prose_top_n: int = 5,
     ) -> dict:
-        """Run the full outer loop: Inner → Middle.
+        """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
         Args:
             idea: The story concept or premise.
@@ -81,6 +83,10 @@ class WritingCouncil:
             image: Optional path to a local image file or an http/https URL. When
                 provided, the PlanningAgent will examine the image and deduce the
                 world's rules from its visual content before constructing the plan.
+            prose_passes: Number of final line-level prose-cleanup passes to run
+                after the middle loop (default 1).
+            prose_top_n: Number of most-egregious prose violations the prose-mode
+                checker reports per pass (default 5).
         """
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
@@ -106,6 +112,14 @@ class WritingCouncil:
         print("[outer] Starting middle loop...")
         story = self._run_middle(plan, story, target_audience)
 
+        # Final prose-cleanup pass(es)
+        for i in range(prose_passes):
+            print(f"[outer] Starting prose-cleanup pass {i + 1}/{prose_passes}...")
+            story = self._run_prose_pass(
+                plan, story, top_n=prose_top_n, label=f"prose.{i + 1}")
+
+        # Section markers survive until here (the prose passes need them); strip last.
+        story = self._strip_section_markers(story)
         return {"story": story, "log": list(self._log)}
 
     # ------------------------------------------------------------------
@@ -290,6 +304,49 @@ class WritingCouncil:
         return story
 
     # ------------------------------------------------------------------
+    # Final prose-cleanup pass: (4 ∥ 3_prose) → 1(plan_revision_prose) → 2
+    # ------------------------------------------------------------------
+    def _run_prose_pass(self, plan: str, story: str, top_n: int = 5,
+                        label: str = "prose") -> str:
+        """One line-level polish pass. Runs consistency + prose-mode checker in
+        parallel, forces all prose findings into a section-revision plan, and
+        applies it. Returns the revised story (markers intact)."""
+        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent "
+              f"(prose mode, top {top_n}) in parallel...")
+        self._log_start(f"{label}.consistency", "ConsistencyAgent")
+        self._log_start(f"{label}.prose_check", "AIFailureCheckerAgent")
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f_cons = executor.submit(self.consistency.run, story=story)
+            f_prose = executor.submit(self.ai_checker.run_prose, story=story, top_n=top_n)
+            cons_result = f_cons.result()
+            prose_result = f_prose.result()
+        self._log_end(cons_result, step=f"{label}.consistency")
+        self._log_end(prose_result, step=f"{label}.prose_check")
+
+        print(f"[{label}] Running PlanningAgent (prose revision plan)...")
+        self._log_start(f"{label}.plan_revision", "PlanningAgent")
+        plan_result = self.planner.plan_revision_prose(
+            story=story,
+            plan=plan,
+            prose_feedback=prose_result["output"],
+            consistency_feedback=cons_result["output"],
+        )
+        self._log_end(plan_result, step=f"{label}.plan_revision")
+        revision_plan = plan_result["output"]
+
+        print(f"[{label}] Running WriterAgent (prose revise)...")
+        self._log_start(f"{label}.write", "WriterAgent")
+        write_result = self.writer.revise(plan=plan, story=story, feedback=revision_plan)
+        self._log_end(write_result, step=f"{label}.write")
+        return write_result["output"]
+
+    @staticmethod
+    def _strip_section_markers(story: str) -> str:
+        """Remove <<<SECTION N>>> markers. Called once at the end of run(),
+        after all prose passes — the passes need the markers intact."""
+        return re.sub(r'<<<SECTION\s+\d+>>>\n?', '', story)
+
+    # ------------------------------------------------------------------
     # Section helpers
     # ------------------------------------------------------------------
 
@@ -315,8 +372,12 @@ class WritingCouncil:
     # Logging helpers
     # ------------------------------------------------------------------
 
-    def _log_start(self, step: str, agent_name: str, input_text: str) -> None:
-        """Write step header + input immediately before the agent is called."""
+    def _log_start(self, step: str, agent_name: str, input_text: str = "") -> None:
+        """Write step header immediately before the agent is called.
+
+        input_text is accepted for caller compatibility but no longer logged —
+        each agent's input equals the prior agent's output already in the log.
+        """
         if not self._log_file:
             return
         with self._log_file.open("a", encoding="utf-8") as f:
@@ -325,9 +386,6 @@ class WritingCouncil:
             f.write(f"AGENT:  {agent_name}\n")
             f.write(f"START:  {datetime.now().strftime('%H:%M:%S')}\n")
             f.write(f"{_DIVIDER}\n")
-            f.write("--- INPUT ---\n")
-            f.write(input_text.strip())
-            f.write("\n\n")
 
     def _log_end(self, result: dict, step: str) -> None:
         """Append output immediately after the agent returns, then record in memory log."""
