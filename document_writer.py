@@ -1,3 +1,5 @@
+import re
+
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_LINE_SPACING, WD_ALIGN_PARAGRAPH
@@ -59,6 +61,7 @@ def save_as_manuscript(story: str, title: str, author: str, output_path: str) ->
     _add_page_number(hdr_para)
 
     # --- Body paragraphs ---
+    story = re.sub(r'<<<SECTION\s+\d+>>>\n?', '', story)
     chunks = [c.strip() for c in story.split("\n\n") if c.strip()]
 
     for chunk in chunks:

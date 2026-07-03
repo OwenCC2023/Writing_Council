@@ -20,6 +20,14 @@ The plan should be specific enough that a skilled writer could follow it without
 Respect the target audience, target length, and any provided world rules. \
 If a basic framework is provided, honor its structure.
 
+Ground every section of the plan in the world being written. The setting, technology, \
+culture, geography, power structures, and physical laws of this world are not backdrop — \
+they are the material from which events are built. A chase should use this world's \
+transport; a conflict should arise from this world's social tensions; a revelation should \
+be legible only within this world's rules. When the plan specifies what happens and why, \
+the answer to both questions should be specific to this world. A plan whose events could \
+be lifted wholesale into a different setting has not done its job.
+
 Keep section descriptions tight. Specify what happens and why — the events, motivations, \
 and turning points. Do not describe atmosphere, setting, or mood in detail; a plan entry \
 that over-specifies how a location feels invites the writer to expand on it at the expense \
