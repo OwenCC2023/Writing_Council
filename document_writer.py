@@ -1,3 +1,5 @@
+import io
+
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_LINE_SPACING, WD_ALIGN_PARAGRAPH
@@ -22,7 +24,13 @@ def _add_page_number(paragraph) -> None:
     run._r.append(fld_end)
 
 
-def save_as_manuscript(story: str, title: str, author: str, output_path: str) -> str:
+def save_as_manuscript(
+    story: str,
+    title: str,
+    author: str,
+    output_path: str = None,
+    output: io.BytesIO = None,
+):
     """Save *story* as a standard manuscript-formatted .docx file.
 
     Format: Times New Roman 12pt, double-spaced, 1" margins, 0.5" first-line
@@ -85,8 +93,14 @@ def save_as_manuscript(story: str, title: str, author: str, output_path: str) ->
             run.font.name = "Times New Roman"
             run.font.size = Pt(12)
 
-    doc.save(output_path)
-    return output_path
+    if (output_path is None) == (output is None):
+        raise ValueError("Provide exactly one of output_path or output")
+    if output_path is not None:
+        doc.save(output_path)
+        return output_path
+    doc.save(output)
+    output.seek(0)
+    return output
 
 
 if __name__ == "__main__":
