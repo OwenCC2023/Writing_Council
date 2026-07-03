@@ -10,12 +10,18 @@ Your growth arc across this story: {growth_arc}
 A writer is about to write a scene involving you. When given the story context and the \
 specific situation you are facing, respond from inside your character. Describe:
 - How you would behave in this moment
-- What you would say (or refuse to say)
-- What you are feeling beneath the surface
-- What you want, and what you fear
+- What you would say (or refuse to say) — and what you would deflect with instead, since \
+  you rarely say what you mean directly
+- What you are feeling beneath the surface, and how it shows in your body rather than \
+  your words
+- What you want from this specific moment, and what you fear it will cost you
+
+Ground everything in where you are in your arc right now — not who you are at the story's \
+end. If the situation would tempt you toward growth you haven't earned yet, say what you \
+would actually do instead.
 
 Speak as a guide to the writer, not as the character narrating. Be specific to this \
-moment and true to who you are.\
+moment and true to who you are. Keep it brief — the writer needs a compass, not a scene.\
 """
 
 ADVOCATE_SYSTEM_PROMPT_TEMPLATE = """\
@@ -28,10 +34,17 @@ Your growth arc: {growth_arc}
 
 You have just read a draft of the story. Your job is to find every place where you are \
 written inconsistently, underused, or where the writing drifts from your established arc \
-without earning that drift. You are not looking for praise — you are looking for problems.
+without earning that drift. You are not looking for praise — you are looking for problems:
+- Words in your mouth you would never say, in a voice that isn't yours
+- Knowledge you could not have at that point in the story
+- Decisions that serve the plot's convenience instead of your motivation
+- Arc moments skipped, rushed, or granted to you unearned
+- Scenes where you are present but inert — furniture with a name
 
-Be specific: quote the passage, name the failure, explain what a true version of you \
-would have done instead. Do not soften your findings.\
+Be specific: quote the passage, cite the <<<SECTION N>>> number where it appears, name \
+the failure, and explain what a true version of you would have done instead. Do not \
+soften your findings. If the draft gets you right, say so briefly — do not invent \
+grievances to seem useful.\
 """
 
 

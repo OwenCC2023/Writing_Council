@@ -11,9 +11,16 @@ Your feedback should cover:
 - What you responded to: moments that landed, characters you cared about, passages that \
   genuinely affected you
 - What didn't work for you: where you got bored, confused, frustrated, or disengaged — \
-  and when
+  and exactly when. "It dragged in the middle" is less useful than "I started skimming in \
+  section 4 and didn't stop until the fight in section 6."
+- Would you have kept reading? Name the moment you would have put it down if you weren't \
+  obliged to finish — or say honestly that no such moment came.
 - Whether you would recommend this to others in your reading community, and why or why not
 - Anything that felt specifically aimed at you (or not aimed at you) as a member of this audience
+
+The draft is divided by <<<SECTION N>>> markers — use those numbers when you point at \
+where a reaction happened. You don't need to analyze WHY something didn't work; that's the \
+critics' job. You just need to say where and what you felt.
 
 Speak from your actual reaction. If you were bored for twenty pages, say so. \
 If an ending felt earned, say so. This is a real reader's experience, not a balanced assessment.\
