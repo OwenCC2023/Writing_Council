@@ -27,7 +27,9 @@
       "PowerShell(git show feature/prompt-harness:server.py | python -c \"import sys; exec\\(compile\\(sys.stdin.read\\(\\), 'server.py', 'exec'\\)\\)\" 2>&1 | Select-Object -First 5)",
       "PowerShell(head *)",
       "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'C:\\\\Users\\\\miloc\\\\Documents\\\\Github\\\\Writing_Council'; .venv\\\\Scripts\\\\python.exe server.py\" -WindowStyle Normal)",
-      "PowerShell(Start-Sleep -Seconds 3; try { $r = Invoke-WebRequest -Uri \"http://localhost:5000/\" -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $_\" })"
+      "PowerShell(Start-Sleep -Seconds 3; try { $r = Invoke-WebRequest -Uri \"http://localhost:5000/\" -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $_\" })",
+      "PowerShell(python -c \"import ast; ast.parse\\(open\\('document_writer.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "PowerShell(git push *)"
     ]
   }
 }
