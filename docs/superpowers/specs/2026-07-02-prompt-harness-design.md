@@ -48,7 +48,7 @@ Flask application with three routes:
 ```
 
 Image handling in `/run`:
-- If `image_file` is present (base64): decode, write to a temp file using the extension from `image_filename` (e.g. `.png`) so `_IMAGE_MEDIA_TYPES` can determine the MIME type, pass path to `WritingCouncil.run(image=...)`, delete temp file in a `finally` block.
+- If `image_file` is present: the value is a data URI (`data:image/png;base64,...`). Server strips the `data:...;base64,` prefix before calling `base64.b64decode()`, writes bytes to a temp file using the extension from `image_filename`, passes path to `WritingCouncil.run(image=...)`, deletes temp file in a `finally` block.
 - If `image_url` is present: pass URL string directly to `WritingCouncil.run(image=...)`.
 - Both take the same `image` parameter on `WritingCouncil.run()` — no changes to the orchestrator needed.
 
@@ -136,7 +136,7 @@ Single self-contained file: HTML + embedded `<style>` + embedded `<script>`. No 
 
 1. User fills form, clicks **Run Council**.
 2. JS validates required fields client-side (non-empty check). Shows inline error if missing.
-3. If image file selected: read as base64 via `FileReader`, include in JSON payload as `image_file` and `image_filename` (original filename, used to preserve extension for MIME detection).
+3. If image file selected: call `FileReader.readAsDataURL()` (async). The POST is constructed and sent inside the `onload` callback — not before it fires. Payload includes `image_file` (the full data URI string) and `image_filename` (original filename, for extension/MIME detection on the server).
 4. `POST /run` sent. Button disabled, spinner shown.
 5. Response arrives (may take several minutes). Spinner hidden.
 6. Story text populated in output `<textarea>`. **Download .docx** button appears. Warning banner shown: "Output is not saved — download before closing this tab."
@@ -145,7 +145,7 @@ Single self-contained file: HTML + embedded `<style>` + embedded `<script>`. No 
 ### Error handling
 
 - Client-side: required field validation before submit.
-- Server-side: if `WritingCouncil.run()` throws, `/run` returns `{"error": "..."}` with HTTP 500. JS displays the error message below the spinner in red.
+- Server-side: if `WritingCouncil.run()` throws, `/run` returns `{"error": "..."}` with HTTP 500. JS displays the error message below the spinner in red and re-enables the Run button so the user can retry.
 - Temp image file always deleted in a `finally` block.
 
 ---
