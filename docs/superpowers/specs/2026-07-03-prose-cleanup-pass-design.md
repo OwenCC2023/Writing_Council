@@ -20,7 +20,7 @@ After the Middle loop returns, run one new half-pass on the full story:
 
 - `4` = existing `ConsistencyAgent.run(story)` — full story, unchanged.
 - `3_prose` = `AIFailureCheckerAgent.run_prose(story, top_n)` — new mode.
-- `1` = existing `PlanningAgent.plan_revision(story, plan, [consistency, prose])`.
+- `1` = new `PlanningAgent.plan_revision_prose(story, plan, prose, consistency)`.
 - `2` = existing `WriterAgent.revise(plan, story, feedback)`.
 
 This is the back half of the existing inner loop — no leading `1 → 2`. Both
@@ -43,22 +43,51 @@ same `ai_writing_failure_modes.md` taxonomy, reframed:
 - **Out of scope — structural modes:** Part I (compressed arc, premature
   resolution, three-act skeleton, symmetrical structure) and any
   plot/pacing/arc-level concern. The Middle loop already owns structure.
+- **Framing — surviving-residue polish, not a fresh sweep.** This runs after the
+  inner and middle loops have already applied a full-taxonomy pass. The prompt
+  states that: the story has been revised repeatedly, so the goal is to catch the
+  **line-level prose defects that survived** prior passes — residue, not a
+  first-pass audit. Prefer defects a reader would trip over in the sentence, not
+  patterns already smoothed.
 - **Output:** the **top N most-egregious** prose violations by severity
   (N = `top_n`, default 5). If fewer than N genuine violations exist, report
   only what is present — do not pad. Each item: the failure-mode name, the exact
-  quoted passage, the `<<<SECTION N>>>` number it appears in, and a concrete fix
-  direction. No separate priority block — the ranked list *is* the priority.
+  quoted passage, the `<<<SECTION N>>>` number it appears in (load-bearing — the
+  planner maps fixes by this number; an item without a section number cannot be
+  targeted), and a concrete fix direction. No separate priority block — the
+  ranked list *is* the priority.
 
 Returns `{"agent": "AIFailureCheckerAgent", "output": ...}` — same shape as
 `run()`, so the planner consumes it identically.
 
-### 2. `WritingCouncil._run_prose_pass(plan, story, target_audience, top_n=5, label="prose")`
+### 2. `PlanningAgent.plan_revision_prose(story, plan, prose_feedback, consistency_feedback)`
+
+New planner method + new system prompt (`PROSE_REVISION_PLAN_SYSTEM_PROMPT`),
+used **only** by the prose pass. Same three-block output format as
+`plan_revision` (STRUCTURAL OPERATIONS / SECTION REVISIONS / GENERAL NOTES), so
+`writer.revise` consumes it unchanged. The difference is the instruction:
+
+- **Force-all-N.** Every prose violation in the prose reviewer's ranked list
+  MUST become a `SECTION N:` revision instruction — the planner may not omit or
+  downrank any of them (this overrides the "omit marginal changes" guidance in
+  the generic `plan_revision`). The ranked list is a fix list, not a candidate
+  pool.
+- Consistency feedback is folded in as supporting instructions on the same
+  sections where it applies, but does not displace any prose item.
+- Same quoting/self-containment rules as `plan_revision`: quote the exact phrase
+  to cut/change, keep each instruction to one line, prefer CUT over rework for
+  stylistic tics.
+
+The generic `plan_revision` is left untouched (inner and middle loops keep
+their funnel behavior).
+
+### 3. `WritingCouncil._run_prose_pass(plan, story, target_audience, top_n=5, label="prose")`
 
 New orchestrator method:
 
 1. Run `consistency.run(story)` and `ai_checker.run_prose(story, top_n)` in
    parallel (ThreadPoolExecutor, max_workers=2).
-2. `planner.plan_revision(story, plan, [cons_output, prose_output])`.
+2. `planner.plan_revision_prose(story, plan, prose_output, cons_output)`.
 3. `writer.revise(plan, story, revision_plan)`.
 4. Return the revised story.
 
@@ -69,7 +98,7 @@ under `prose.*` (e.g. `prose.consistency`, `prose.prose_check`,
 Operates on the full story (not section-limited) — the pass exists to catch
 prose defects wherever they sit after all prior rewrites.
 
-### 3. Wiring in `run()`
+### 4. Wiring in `run()`
 
 Add a `prose_passes: int = 1` parameter and a `prose_top_n: int = 5` parameter.
 After the Middle loop:
@@ -78,10 +107,27 @@ After the Middle loop:
 for i in range(prose_passes):
     story = self._run_prose_pass(plan, story, target_audience,
                                  top_n=prose_top_n, label=f"prose.{i+1}")
+story = self._strip_section_markers(story)   # final step — see below
+return {"story": story, "log": list(self._log)}
 ```
 
 Default runs the pass once. Structured so a future "until clean" mode changes
 only the loop condition — the per-pass method stays as-is.
+
+### 5. Move section-marker stripping to the end of the pipeline
+
+`<<<SECTION N>>>` markers are currently stripped inside `document_writer.py`
+(`save_as_manuscript`, the `re.sub(r'<<<SECTION\s+\d+>>>\n?', '', story)` line).
+The prose pass needs the markers intact (both the prose reviewer's section
+citations and `writer.revise`'s section targeting depend on them), so stripping
+must happen **after** all prose passes complete, as the final step of `run()`.
+
+- Add `WritingCouncil._strip_section_markers(story)` — the same regex — and call
+  it once at the end of `run()`, after the prose loop.
+- Remove the `re.sub` strip line from `document_writer.save_as_manuscript`.
+  Safe because all three producers (`server.py` → `/save`, `consult_the_council.py`,
+  `prompt_harness.py`) receive the story from `council.run()`, which now returns
+  it marker-free. `document_writer` receives no marked-up story from any path.
 
 ## Callers
 
@@ -99,9 +145,15 @@ scope for this pass.
 
 ## Testing
 
-- Unit: `run_prose` returns the expected dict shape and its prompt names the
-  prose taxonomy and the `top_n` cap. Mock `_call_claude`.
-- Unit: `_run_prose_pass` calls consistency + prose-check + plan_revision +
+- Unit: `run_prose` returns the expected dict shape; its prompt names the prose
+  taxonomy, the surviving-residue framing, and the `top_n` cap. Mock `_call_claude`.
+- Unit: `plan_revision_prose` returns the three-block shape and its prompt
+  carries the force-all-N instruction. Mock `_call_claude`.
+- Unit: `_run_prose_pass` calls consistency + prose-check + plan_revision_prose +
   revise in order and returns the writer's story. Mock the agents.
+- Unit: `_strip_section_markers` removes `<<<SECTION N>>>` lines; `run()` returns
+  a marker-free story.
+- Regression: `save_as_manuscript` still produces clean output when given a
+  marker-free story (markers no longer its responsibility).
 - Integration (manual): run the full pipeline on a short idea, confirm the log
   shows a `prose.*` block after the middle block and the story changes.
