@@ -71,7 +71,7 @@ class WritingCouncil:
         prose_passes: int = 1,
         prose_top_n: int = 5,
     ) -> dict:
-        """Run the full outer loop: Inner → Middle.
+        """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
         Args:
             idea: The story concept or premise.
@@ -83,6 +83,10 @@ class WritingCouncil:
             image: Optional path to a local image file or an http/https URL. When
                 provided, the PlanningAgent will examine the image and deduce the
                 world's rules from its visual content before constructing the plan.
+            prose_passes: Number of final line-level prose-cleanup passes to run
+                after the middle loop (default 1).
+            prose_top_n: Number of most-egregious prose violations the prose-mode
+                checker reports per pass (default 5).
         """
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
