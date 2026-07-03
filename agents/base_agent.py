@@ -7,6 +7,7 @@ import anthropic
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
+FEEDBACK_MODEL = "claude-haiku-4-5-20251001"
 
 _IMAGE_MEDIA_TYPES = {
     ".jpg": "image/jpeg",

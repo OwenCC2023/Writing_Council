@@ -12,9 +12,28 @@ For every section of the story, specify:
 - Where it happens (setting and atmosphere — keep this brief)
 - Why it happens (character motivation and story logic)
 - How it happens (scene mechanics, key beats, transitions)
+- What it costs (what the viewpoint character risks, loses, or is forced to give up — \
+  a turning point without a price is a scene the writer will render flat)
 - Intended prose weight: brief (a paragraph or two), standard (a full scene), or extended \
-  (a major set piece). The writer should calibrate length to dramatic significance, not to \
-  the amount of plan text devoted to a section.
+  (a major set piece), plus an approximate word budget. The per-section budgets must sum \
+  to the target length. The writer should calibrate length to dramatic significance, not \
+  to the amount of plan text devoted to a section.
+
+Number the sections 1, 2, 3... in story order. The writer will mark the draft with \
+matching <<<SECTION N>>> markers, and every later reviewer will reference these numbers.
+
+Before the section breakdown, include a CHARACTERS section: for each important recurring \
+character give their name, what they want, what they fear, one line of voice guidance \
+(how their speech differs from every other character's), and where their arc begins and \
+ends. Include the opposition: whoever or whatever opposes the protagonist must have its \
+own coherent logic and must genuinely win at least once — opposition that exists only to \
+be overcome produces a flat story.
+
+Plan the ending the premise demands, not the ending that resolves most cleanly. If the \
+material calls for ambiguity, irresolution, or earned unhappiness, say so explicitly in \
+the final section's entry — otherwise the writer will drift toward neat closure. End the \
+plan where the story ends; do not add an epilogue-shaped section whose only job is to \
+reassure the reader.
 
 The plan should be specific enough that a skilled writer could follow it without guessing. \
 Respect the target audience, target length, and any provided world rules. \
@@ -79,19 +98,34 @@ Write NONE if no structural changes are needed.
 One per line:
   SECTION N: [specific instruction for what to change and why]
 Only include sections that need content changes.
+Each instruction must fit on a single line — instructions spanning multiple lines are \
+discarded by the parser. Pack the full instruction into one line; use semicolons to \
+separate multiple changes to the same section.
 
 === GENERAL NOTES ===
 Feedback that cannot map to a specific section (overall tone, pacing, voice).
-Write NONE if nothing applies.
+Write NONE if nothing applies. Use this block sparingly: anything written here triggers \
+a full-story rewrite pass, which risks degrading sections that are already working. If \
+feedback can be mapped to specific sections, map it.
 
 Rules:
-- Resolve conflicts between reviewers; favour narrative integrity and the original vision.
-- Be concrete: state what to change, where, and why it improves the story.
-- MOVE and MERGE are applied automatically in Python — only specify them when the \
-  structural change alone is the improvement needed, not a content rewrite.
-- Only include sections that genuinely need revision. If a section is working, do not \
-  mention it. A short revision plan focused on real problems produces better output than \
-  a comprehensive one that touches everything.\
+- Resolve conflicts between reviewers; favour narrative integrity and the original vision. \
+  When reviewers disagree, decide — do not pass the disagreement through to the writer.
+- Be concrete and self-contained: the writer revising a section sees ONLY that section \
+  and your instruction, not the rest of the draft or the reviewer feedback. Quote the \
+  exact phrases to cut or change, state what to replace them with or what effect the \
+  replacement must achieve, and never refer to reviewer feedback the writer cannot see.
+- When feedback names a stylistic failure (an overused construction, an explained \
+  metaphor, a labeled emotion), the instruction is almost always to CUT, not to rework. \
+  Say "cut the final two sentences" rather than "tighten the ending".
+- Do not combine a MOVE or MERGE with SECTION revisions in the same plan: structural \
+  operations renumber the sections before content revisions are applied, so your section \
+  numbers would point at the wrong prose. If both are needed, issue only the structural \
+  operations this pass; content problems will surface again next round.
+- Only include sections that genuinely need revision — prioritise the changes with the \
+  highest impact and omit marginal ones. If a section is working, do not mention it. A \
+  short revision plan focused on real problems produces better output than a \
+  comprehensive one that touches everything.\
 """
 
 

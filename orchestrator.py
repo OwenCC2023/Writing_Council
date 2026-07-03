@@ -1,3 +1,4 @@
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -160,9 +161,9 @@ class WritingCouncil:
 
             print(f"[{label}] Running WriterAgent (initial write)...")
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
-            result = self.writer.run(plan=plan)
-            self._log_end(result, step=f"{label}.write_1")
-            story = result["output"]
+            write_result = self.writer.run(plan=plan)
+            self._log_end(write_result, step=f"{label}.write_1")
+            story = write_result["output"]
 
         else:
             # ---- Called from Middle: 1 synthesizes middle feedback, 2 revises ----
@@ -187,17 +188,28 @@ class WritingCouncil:
                 f"{label}.write_1", "WriterAgent",
                 f"revision_plan:\n{pre_write_plan}\n\nplan:\n{plan}\n\nstory:\n{story}",
             )
-            result = self.writer.revise(plan=plan, story=story, feedback=pre_write_plan)
-            self._log_end(result, step=f"{label}.write_1")
-            story = result["output"]
+            write_result = self.writer.revise(plan=plan, story=story, feedback=pre_write_plan)
+            self._log_end(write_result, step=f"{label}.write_1")
+            story = write_result["output"]
 
         # ---- 4 and 3: parallel consistency and AI failure check ----
-        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent in parallel...")
-        self._log_start(f"{label}.consistency", "ConsistencyAgent", f"story:\n{story}")
-        self._log_start(f"{label}.ai_check", "AIFailureCheckerAgent", f"story:\n{story}")
+        # If the writer only rewrote specific sections, pass only those to the checkers.
+        revised_sections = write_result.get("revised_sections")
+        check_text = (
+            self._extract_sections_text(story, revised_sections)
+            if revised_sections is not None
+            else story
+        )
+        check_label = (
+            f"sections {revised_sections}" if revised_sections is not None else "full story"
+        )
+        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent in parallel "
+              f"({check_label})...")
+        self._log_start(f"{label}.consistency", "ConsistencyAgent", f"story:\n{check_text}")
+        self._log_start(f"{label}.ai_check", "AIFailureCheckerAgent", f"story:\n{check_text}")
         with ThreadPoolExecutor(max_workers=2) as executor:
-            f_cons = executor.submit(self.consistency.run, story=story)
-            f_ai = executor.submit(self.ai_checker.run, story=story)
+            f_cons = executor.submit(self.consistency.run, story=check_text)
+            f_ai = executor.submit(self.ai_checker.run, story=check_text)
             cons_result = f_cons.result()
             ai_result = f_ai.result()
         self._log_end(cons_result, step=f"{label}.consistency")
@@ -276,6 +288,28 @@ class WritingCouncil:
             label="middle.inner",
         )
         return story
+
+    # ------------------------------------------------------------------
+    # Section helpers
+    # ------------------------------------------------------------------
+
+    def _extract_sections_text(self, story: str, section_nums: list) -> str:
+        """Return only the specified sections from the story, with their markers."""
+        pattern = re.compile(r'<<<SECTION\s+(\d+)>>>', re.IGNORECASE)
+        parts = pattern.split(story)
+        if len(parts) < 3:
+            return story  # no markers; return full story as fallback
+        sections = {}
+        i = 1
+        while i < len(parts) - 1:
+            sections[int(parts[i])] = parts[i + 1].strip()
+            i += 2
+        result = "\n\n".join(
+            f"<<<SECTION {n}>>>\n{sections[n]}"
+            for n in sorted(section_nums)
+            if n in sections
+        )
+        return result if result else story
 
     # ------------------------------------------------------------------
     # Logging helpers

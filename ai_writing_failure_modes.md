@@ -79,31 +79,41 @@ Within a piece, AI writing maintains a consistent register that modulates very l
 
 **Symptom:** Prose that is competent and consistent and never surprising. Nothing lands because nothing has any real weight against its surroundings.
 
-### 2.4 The Corporate Warmth Register
+### 2.4 Aphorism Cadence
+
+At moments of moral or emotional weight, AI writing defaults to a sequence of short, declarative sentences of uniform gravity. Each statement lands with the same force. Nothing is subordinated to anything else. *They are there because the shipyard is there. I am choosing to strike the shipyard knowing that I cannot fully control what follows from that choice. The parameters are not absolution. They are the difference between accepting a risk and not caring about it.*
+
+The sentences are not wrong — each one may be doing distinct work — but the cadence performs significance rather than producing it. When every statement issues with equal solemnity, the reader's ear stops registering weight. The passage sounds serious the way a metronome sounds like music. The failure is the absence of syntactic variation: no subordination, no qualification, no sentence that holds two ideas in tension rather than sequence. A longer sentence that lets two thoughts exist in relationship to each other would require the writer to commit to what that relationship *is*. The short declarative defers that commitment while sounding like it has already made it.
+
+The tell is the feeling that sentences could be shuffled without much loss — that the passage is a series of pronouncements rather than thought in motion.
+
+**Symptom:** Paragraphs composed entirely of short declarative sentences at moments of high stakes. Uniform weight across statements that should have hierarchy. Prose that sounds oracular but yields no more meaning on a second reading than a first. The sense that gravity is being *performed* at the sentence level rather than *earned* at the level of content.
+
+### 2.5 The Corporate Warmth Register
 
 In business, marketing, and general-purpose writing, AI defaults to a tone that is simultaneously friendly and professional, direct and inclusive, confident and non-presumptuous. This register is recognizable from HR communications, brand copy, and customer success emails. It is technically inoffensive and practically unreadable.
 
 **Symptom:** Content that feels like it was produced by a content team operating under brand guidelines.
 
-### 2.5 Hedge Stacking
+### 2.6 Hedge Stacking
 
 AI writing accumulates qualifications. A single claim might be hedged with *generally*, *in many cases*, *it's often argued that*, *while perspectives vary*, and *ultimately* all in the same sentence. Each hedge individually is defensible; collectively they produce prose that communicates nothing.
 
 **Symptom:** Paragraphs that could be summarized as "sometimes some people think some things, though others disagree."
 
-### 2.6 Pseudo-Profundity
+### 2.7 Pseudo-Profundity
 
 AI writing reaches for weightiness through abstract language, balanced formulations, and the grammatical shape of insight without the substance: *"In the end, it is not the destination but the journey that defines us."* These constructions pattern-match on aphorism and philosophical statement. They are not wrong, exactly. They are empty.
 
 **Symptom:** Closing lines and transitional reflections that feel meaningful for about two seconds.
 
-### 2.7 Adverb Dependency
+### 2.8 Adverb Dependency
 
 AI writing relies heavily on adverbs to establish tone and intensity: *spoke softly, smiled warmly, gazed sadly*. This is the prose equivalent of labeling emotions (see 2.2) — it tells the reader the register of an action without performing it.
 
 **Symptom:** Overloaded -ly adverbs attached to dialogue tags and action beats.
 
-### 2.8 "Particular" as False Precision
+### 2.9 "Particular" as False Precision
 
 AI writing reaches for the word *particular* as a precision-signaling device. It implies that what follows is specific, observed, and exactly right — but it almost never is. The word does the work of specificity without providing any. Examples from a single piece of fiction: *the particular chaos of too many Weasleys*, *the particular stillness that meant something mattered*, *a particular kind of exposure*, *the particular gravity of small, real things*, *the particular expression of controlled fury*.
 
@@ -111,35 +121,39 @@ None of these are more precise for the word *particular*. They are vaguer — th
 
 **Symptom:** *Particular* or *a particular kind of* appearing multiple times across a piece. Nouns that feel like they should be specific but remain abstract. The word used as a substitute for the concrete detail that would actually do the job.
 
-### 2.9 Negation-Then-Correction
+### 2.10 Negation-Then-Correction
 
 AI writing reaches frequently for the structure *"This was not X. This was Y."* — stating what something is not before stating what it is. The construction implies that the narrator has achieved discriminating precision, that they have ruled out the obvious reading and arrived at the true one. Used once, it can land. Used at density — six or more times across a piece — it becomes a tic, a mechanical move toward emphasis that loses all force through repetition.
 
 **Symptom:** The *This was not / This was* structure appearing repeatedly across a piece. Each individual instance defensible; the pattern itself a tell.
 
-### 2.10 Emotional Inventory by Negation
+### 2.11 Emotional Inventory by Negation
 
 When cataloguing a character's inner state, AI writing habitually lists what the feeling is *not* before naming what it is: *not anger or pity or even sadness*, *not quite grief, not quite relief*, *something that was not hope but was not its absence either*. Human writers use this occasionally for deliberate effect. AI uses it as a default approach to emotional complexity — the negations creating an impression of nuance without the underlying specificity that would earn it.
 
 **Symptom:** Emotional states preceded by a list of what they are not. The negations outnumbering the positive description. A sense of careful discrimination that doesn't resolve into anything concrete.
 
-### 2.11 Accumulating Polysyndeton as Default Intensifier
+### 2.12 Accumulating Polysyndeton as Default Intensifier
 
 AI writing reaches for the *and [pronoun] was [adjective] and [pronoun] was [adjective] and* construction as a default mode of emotional escalation. The accumulating rhythm can be powerful — it mimics the way emotion overtakes syntactic control. But it requires restraint to work. Used once at a climactic moment, it earns its weight. Deployed repeatedly across a piece as a general-purpose intensifier, it becomes background noise, a rhythmic habit rather than a deliberate choice.
 
 **Symptom:** Polysyndeton appearing in multiple scenes across a piece, not only at the highest-stakes moments. The construction used for moderate emotional beats that haven't earned the register.
 
-### 2.12 Rhetorical Restatement
+### 2.13 Rhetorical Restatement and Over-Specification
 
 AI writing frequently states something and then immediately restates it in different terms — typically translating a direct statement into a metaphor, or a metaphor into a direct statement: *She had described the immediate mechanism and omitted the structural consequence. She had shown him the match and neglected to mention the kerosene.* The second sentence is the first sentence in other words. Human writers generally pick one. AI keeps both, implying that two formulations of the same idea constitute depth rather than redundancy.
 
-**Symptom:** Adjacent sentences where the second restates the first in different register or imagery. Pairs of statements where cutting one would lose nothing. A sense that the prose is explaining itself to itself.
+A related failure at the sentence level: restating the subject with a full noun phrase when a pronoun would do, or extending a clause one beat past where the meaning is complete. *And it was showing in exactly the places where the exhaustion was most visible* — where *the exhaustion* could simply be *it*, and the sentence would be tighter and more confident for the compression. The longer form implies the writer doesn't trust the reader to track what *it* refers to, or doesn't trust the sentence to end when it's done.
 
-### 2.13 "It Isn't X. That's the Problem."
+Both failures share the same root: prose that doesn't know it has finished making its point.
+
+**Symptom:** Adjacent sentences where the second restates the first in different register or imagery. Pairs of statements where cutting one would lose nothing. Within individual sentences: noun phrases where pronouns would serve, qualifications that extend past the point of completion. A sense that the prose is explaining itself to itself.
+
+### 2.14 "It Isn't X. That's the Problem."
 
 A distinct negation structure: the sentence asserts that the obvious problem — the one that would be easy to solve, easy to dismiss — is *not* the problem. The real problem goes unnamed or is harder to locate. *The idea isn't wrong. That's the problem. She has been trying to find the place where it breaks for the past two hours, and she keeps not finding it.*
 
-Used well, this construction conveys genuine vertiginous complexity — the thing you'd reach for to resolve the situation doesn't apply, and so you're left with no handhold. The problem isn't solvable in the way you thought, which means it may not be solvable at all. The construction is stronger than 2.9 (Negation-Then-Correction) because it withholds the correction entirely. There is no *"This was Y"* to follow. The negation is the whole move.
+Used well, this construction conveys genuine vertiginous complexity — the thing you'd reach for to resolve the situation doesn't apply, and so you're left with no handhold. The problem isn't solvable in the way you thought, which means it may not be solvable at all. The construction is stronger than 2.10 (Negation-Then-Correction) because it withholds the correction entirely. There is no *"This was Y"* to follow. The negation is the whole move.
 
 The failure mode is the same as most constructions in this section: AI reaches for it as a default signal of complexity, deploying it at moments that haven't earned the vertigo it implies. When the construction appears repeatedly, it stops conveying irresolvability and starts conveying that the writer has a favorite sentence shape.
 
@@ -222,7 +236,37 @@ The failure is subtler than most AI tells because individual instances can be ge
 
 **Symptom:** Similes that announce their own perceptiveness. Comparisons that invoke a class of things (*the way that houses are*, *the way you stop noticing*) rather than rendering the specific thing. A mild dissociation from the scene — the narrator observing rather than inhabiting.
 
-### 3.11 Described Insight
+### 3.11 The Characterological Action Simile
+
+A close relative of 3.10, distinct enough to warrant its own entry. Where the self-congratulatory simile compares a *situation* to a class of situations, this construction compares a *character's action* to another of their own actions: *He catalogued it the way he catalogued supply shortfalls and fuel reserves.* The implicit claim is intimate knowledge of how this person's mind works — two different things living in the same cognitive register reveals something true about who they are.
+
+Used well, it can be exactly that. The failure is that AI reaches for it as a default move toward characterization, delivering psychological intimacy as a narrator's report rather than earning it through accumulated behavior. The reader is told how the character processes the world before they've had enough time with the character to recognize whether that's true. The construction does the work that thirty pages of demonstrated behavior should do, in a single sentence.
+
+It also tends to appear at moments of emotional distance or suppression — characters processing grief, danger, or love through the register of the practical — which gives it a consistent flavor that becomes recognizable across AI fiction: the character who relates to everything through their professional competence, rendered via this exact sentence shape.
+
+**Symptom:** *[Character] did X the way [character] did Y* appearing as a characterization shortcut. The two actions always in asymmetric registers — one emotional or significant, one mundane or professional. A sense of revealed interiority that the surrounding scenes haven't established.
+
+### 3.12 Taxonomic Self-Knowledge
+
+A narrator reports that a character has pre-sorted mental compartments, and names those compartments with elaborate clinical precision: *Quent listened to it with the part of his mind he reserved for things that needed to be correctly witnessed without requiring his active attention.*
+
+The construction implies two things simultaneously: that the character has unusual self-knowledge (they know exactly which partition of their mind is active), and that the narrator has complete access to that architecture. Both claims are delivered as given rather than earned. The subordinate clause defining the compartment has the shape of exact psychological observation — *the part reserved for things that needed to be correctly witnessed without requiring his active attention* — while actually being quite vague. "Correctly witnessed" is doing a lot of work without doing any.
+
+This is related to 3.11 (Characterological Action Simile) in that both reveal character through cognitive register rather than behavior. The distinction is that 3.11 works through comparison — two things in the same register — while this works through taxonomy: the character's mind is sorted into named zones, and the narrator reports which zone is active. It's a more clinical construction, and cooler in temperature. It tends to appear around characters who are being coded as competent, controlled, or emotionally defended.
+
+**Symptom:** Subordinate clauses that name a specific mental compartment or reserved cognitive function. Elaborate precision in defining the compartment that doesn't resolve into anything concrete. Characters whose self-knowledge is reported by the narrator as complete and available rather than dramatized through behavior.
+
+### 3.13 Credentialed Perception
+
+Before allowing a character to make an observation, AI writing establishes the experience that licenses them to make it: *She had given enough briefings to know the difference.* The credential arrives first; the perception follows pre-authorized. The implicit argument is that the reader might not trust the character's read on the situation without knowing they've earned the right to have it.
+
+Human writers tend to trust the observation to carry its own authority — if the detail is specific and true, the reader accepts it. The credential move betrays a different intuition: that perception needs a résumé. It shows up most reliably around characters who are being established as competent, and at moments where the character is noticing something the plot needs the reader to accept. *She had seen enough crime scenes to know this one was staged. He had delivered enough bad news to recognize the moment someone stopped hearing you.* Each construction provides institutional backing for what should be self-evident from the scene.
+
+The failure compounds when the credential is itself vague — *enough briefings*, *enough crime scenes* — which means the authority being invoked is impressionistic rather than specific. The character has done the thing *enough times*. The narrator won't say how many. The credential is a gesture toward experience rather than experience itself.
+
+**Symptom:** *She had [done X] enough to know* constructions preceding an observation. Experience cited as authorization for perception rather than demonstrated through it. Credentials that are impressionistic rather than specific — *enough times*, *too many times*, *more than once*. Observations that could stand alone but are preceded by their licensing clause.
+
+### 3.14 Described Insight
 
 At moments of intended depth, AI fiction narrates the profound realization a character is having rather than constructing the scene so the reader arrives at that realization themselves. The language becomes more beautiful and more precise exactly when it should step back. Examples:
 
@@ -239,23 +283,47 @@ The failure intensifies at climactic moments. The bigger the scene, the more AI 
 
 **Symptom:** Insight-shaped sentences at moments of high emotional stakes. A character's realization described from outside rather than inhabited from inside. The reader told what just happened before they've felt it happen. Prose that grows more lyrical and explanatory at exactly the wrong moment.
 
-### 3.12 Failure to Trust the Work
+### 3.14 Failure to Trust the Work
 
 After a scene or piece has earned its meaning, AI writing frequently continues — restating, accumulating, cascading — as if the work might not have landed. The closing paragraph explains what the ending already showed. The final sentence glosses what the final image made clear. The repetition can have the grammatical shape of intentional rhythm (*and the answer was this, and the answer was that, and the answer was the life they had chosen*), but the intent is anxiety, not music.
 
 The distinction between earned repetition and this failure is whether the accumulation adds pressure or just length. Earned repetition works because each return changes something — deepens, recontextualizes, tilts. Anxious repetition returns to the same point because the writer doesn't believe the reader got it. By the time a well-constructed scene reaches its final image, the reader already knows what the closed door means. Forty more words explaining it don't deepen the meaning; they dilute it, and they reveal that the writing doesn't trust the work that came before.
 
-This failure is distinct from Described Insight (3.11). That one intervenes *before* the reader has felt anything, explaining a realization before it can land. This one intervenes *after* — when the work has already done its job and the writing keeps going anyway.
+This failure is distinct from Described Insight (3.14). That one intervenes *before* the reader has felt anything, explaining a realization before it can land. This one intervenes *after* — when the work has already done its job and the writing keeps going anyway.
 
 **Symptom:** Endings that continue past their natural close. Final paragraphs that restate what the scene already showed. Rhythmic, accumulating language at the close of a piece that reads like confidence but functions like reassurance. A story that doesn't know it's finished.
 
-### 3.13 The Appositive Character Resume
+### 3.15 The Appositive Character Resume
 
 When introducing minor characters, AI fiction defaults to the subordinate-clause résumé: a character appears and is immediately followed by a relative clause cataloguing their relevant history, traits, and contradictions. *Dawlish, who had been Confunded so many times during the war that his short-term memory had developed a permanent stutter, but whose institutional knowledge of Ministry procedure was encyclopaedic.* All the information is accurate to the character and none of it is earned by the scene. The character is handed to the reader fully assembled.
 
 Human writers tend to let minor characters accumulate meaning through what they do and say. AI writers, trained on fiction that includes extensive character description and wiki-style worldbuilding, reach for the summary introduction — packing biography and contradiction into a single sentence the moment a character steps on the page.
 
 **Symptom:** Minor characters introduced with relative clauses that catalogue their history and contradictions. Information delivered in apposition that could only be known by an omniscient summarizer, not observed in a scene. Characters who arrive complete rather than revealed.
+
+### 3.16 Preemptive Social Gloss
+
+The narrator explains the institutional or social meaning of an action at the same moment the action is performed, foreclosing the reader's independent experience of it: *...and rose and said the response that the protocol demanded and that everyone present understood was a formality.*
+
+The construction does two things simultaneously — delivers the beat and files its meaning. The ritual is performed and defused in the same clause. By the time the reader has processed the sentence, the social significance has already been interpreted and closed. There is nothing left to read into it.
+
+The tell is the *everyone understood* move, or its variants: *everyone knew*, *as was expected*, *as the occasion required*. These invoke a collective witness whose shared understanding confirms the narrator's interpretation, leaving no gap for the reader to occupy. It is a particularly AI-flavored impulse because it resolves ambiguity instantly — the room's reading of the moment is reported before the reader can form their own. A skilled writer would let the formality show through the action itself: the particular phrasing of the response, the quality of the silence after, what nobody said.
+
+Related to 3.14 (Described Insight), which preempts the reader's emotional interpretation of a moment. This one preempts the reader's *social and institutional* interpretation — the meaning of a gesture within a system of shared understanding.
+
+**Symptom:** Subordinate clauses that explain what a ritual, statement, or gesture means to the people in the room. *Everyone understood*, *as the protocol required*, *as was expected* used to gloss an action's significance before the reader has sat with it. Scenes where the social texture is reported rather than felt.
+
+### 3.17 Scene as Caption
+
+Dramatic action that should exist as a scene is summarized into a sentence, with the narrator delivering a quality judgment in place of the experience itself: *Mwangi-Ross asked three more questions, each better than the last, and then the session ended.*
+
+The reader never hears the questions. The scene has been replaced by its own after-action report. What makes this construction a specific tell — rather than just efficient summary, which fiction uses legitimately — is the evaluative phrase: *each better than the last*, *the best she'd heard all year*, *more pointed than he expected*. The narrator has graded the event and posted the results. The reader receives the verdict without the evidence.
+
+This is probably the most common fiction failure mode in the document, because it appears wherever AI writing loses confidence that a scene is worth rendering in full. Difficult dialogue, technical demonstrations of competence, arguments that need to escalate convincingly — these are expensive to write well, and the caption move is cheaper. The scene collapses into a sentence that tells the reader what they would have felt had the scene existed.
+
+It differs from 3.14 (Described Insight), which summarizes a character's *inner realization*. This pattern summarizes *external dramatic action* — things that happened, exchanges that occurred, performances that took place. The failure is the same in both cases: the narrator substitutes report for experience. But the terrain is different, and the tell is different. Described Insight reaches for lyrical language; Scene as Caption reaches for evaluative shorthand.
+
+**Symptom:** Events summarized with quality judgments attached — *each better than the last*, *more than she'd hoped for*, *exactly the right question*. Scenes that exist only as their own summaries. Competence demonstrated by assertion rather than shown through action. The reader told what to conclude about something they didn't witness.
 
 ---
 
@@ -337,6 +405,7 @@ AI writing mimics the surface features of good writing — varied sentence lengt
 | The AI dialect | Voice | Recognizable cluster of overused phrases |
 | Affective safety net | Voice | Emotions named rather than rendered |
 | Tonal homogenization | Voice | Consistent register that never surprises |
+| Aphorism cadence | Voice | Uniform short declaratives at moments of weight; gravity performed at the sentence level rather than earned by content |
 | Corporate warmth | Voice | HR-speak as default register |
 | Hedge stacking | Voice | Qualifications that hollow out claims |
 | Pseudo-profundity | Voice | Grammatical shape of insight without content |
@@ -345,7 +414,7 @@ AI writing mimics the surface features of good writing — varied sentence lengt
 | Negation-then-correction | Voice | "This was not X. This was Y." — emphasis tic at density |
 | Emotional inventory by negation | Voice | Listing what a feeling isn't before naming what it is |
 | Accumulating polysyndeton | Voice | "and she was X and she was Y" as default intensifier, not earned climax |
-| Rhetorical restatement | Voice | Stating something, then immediately restating it in different terms |
+| Rhetorical restatement / over-specification | Voice | Restating an idea in different terms, or extending a sentence past its natural end; prose that doesn't know it's finished |
 | "It isn't X. That's the problem." | Voice | Negation that withholds the correction, deployed as default complexity signal rather than earned irresolvability |
 | The helpful villain | Fiction | Antagonists who serve the protagonist's arc |
 | Character as function | Fiction | Characters defined entirely by narrative role |
@@ -357,9 +426,14 @@ AI writing mimics the surface features of good writing — varied sentence lengt
 | Temporal flattening | Fiction | Uniform prose weight across scene types |
 | Coincidence economy | Fiction | Plot mechanics visible through the surface |
 | The self-congratulatory simile | Fiction | "X was Y in the way that X's with Z are Y" — insight performed, not earned |
+| Characterological action simile | Fiction | "[Character] did X the way [character] did Y" — intimacy reported, not accumulated |
+| Taxonomic self-knowledge | Fiction | Narrator reports character's pre-sorted mental compartments with clinical precision that dissolves on inspection |
+| Credentialed perception | Fiction | Experience cited as authorization for observation before the observation is made; "she had given enough briefings to know" |
 | Described insight | Fiction | Profound realizations narrated rather than constructed; metaphors explained rather than trusted |
 | Failure to trust the work | Fiction | Endings that continue past their close; accumulated restatement of meaning the scene already made |
 | Appositive character resume | Fiction | Minor characters introduced with subordinate-clause biography rather than revealed through action |
+| Preemptive social gloss | Fiction | Narrator explains the institutional meaning of a ritual at the moment it occurs; "everyone understood" forecloses the reader's own reading |
+| Scene as caption | Fiction | Dramatic action summarized with evaluative shorthand rather than rendered; the reader told what to conclude about something they didn't witness |
 | Hallucination | Cross-cutting | False citations, invented facts stated confidently |
 | Recency asymmetry | Cross-cutting | Degrades near training cutoff |
 | Consensus narrator | Cross-cutting | Describes debate rather than joins it |
