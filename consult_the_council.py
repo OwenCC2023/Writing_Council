@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from orchestrator import WritingCouncil
-from document_writer import save_as_manuscript
+from document_writer import save_as_manuscript, resolve_output_path
 
 
 def _load(path: str, fallback: str) -> str:
@@ -53,7 +53,7 @@ path = save_as_manuscript(
     story=result["story"],
     title=TITLE,
     author=AUTHOR,
-    output_path=f"{TITLE}.docx",
+    output_path=resolve_output_path(TITLE),
 )
 print(f"Saved manuscript: {path}")
 

@@ -1,11 +1,34 @@
 import io
 import re
+from pathlib import Path
 
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_LINE_SPACING, WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
+
+_STORY_OUTPUTS = Path(__file__).parent / "story_outputs"
+
+
+def resolve_output_path(title: str) -> Path:
+    """Return a non-colliding .docx path under story_outputs/<title>/.
+
+    Creates the folder if needed. If <title>.docx already exists,
+    returns <title>_v2.docx, _v3.docx, … until a free name is found.
+    """
+    folder = _STORY_OUTPUTS / title
+    folder.mkdir(parents=True, exist_ok=True)
+    candidate = folder / f"{title}.docx"
+    if not candidate.exists():
+        return candidate
+    v = 2
+    while True:
+        candidate = folder / f"{title}_v{v}.docx"
+        if not candidate.exists():
+            return candidate
+        v += 1
 
 
 def _add_page_number(paragraph) -> None:

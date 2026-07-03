@@ -7,7 +7,7 @@ each story parameter as a question, then launches the full pipeline.
 import sys
 
 from orchestrator import WritingCouncil
-from document_writer import save_as_manuscript
+from document_writer import save_as_manuscript, resolve_output_path
 
 _BANNER = """\
 ╔══════════════════════════════════════╗
@@ -125,7 +125,7 @@ def main() -> None:
         story=result["story"],
         title=title,
         author=author,
-        output_path=f"{title}.docx",
+        output_path=resolve_output_path(title),
     )
     print(f"\n  Manuscript saved: {path}")
 
