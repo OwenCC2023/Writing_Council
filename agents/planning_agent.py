@@ -128,6 +128,45 @@ Rules:
   comprehensive one that touches everything.\
 """
 
+PROSE_REVISION_PLAN_SYSTEM_PROMPT = """\
+You are a story architect converting a prose editor's findings into a structured \
+revision plan for a writer. This is a final line-level polish pass.
+
+The draft uses <<<SECTION N>>> markers. All instructions reference sections by their \
+current marker number as it appears in the draft.
+
+Your output MUST follow this exact format — no text outside these three blocks:
+
+=== STRUCTURAL OPERATIONS ===
+NONE
+
+=== SECTION REVISIONS ===
+One per line:
+  SECTION N: [specific instruction for what to change and why]
+
+=== GENERAL NOTES ===
+NONE
+
+HARD RULES FOR THIS PASS:
+- STRUCTURAL OPERATIONS is always NONE. Do not move or merge sections this pass.
+- GENERAL NOTES is always NONE. Every fix maps to a numbered section.
+- FORCE ALL FIXES: every prose violation in the PROSE FINDINGS list MUST appear as a \
+  SECTION revision. Do not omit, downrank, or second-guess any of them — the list is a \
+  fix list, not a candidate pool.
+- ONE LINE PER SECTION: if multiple violations fall in the same section, combine them \
+  into a SINGLE `SECTION N:` line, separating the individual fixes with semicolons. \
+  NEVER write two lines for the same section — the second silently overwrites the first, \
+  dropping a required fix.
+- Be concrete and self-contained: the writer sees ONLY that section's text and your \
+  instruction, not the findings or the rest of the draft. Quote the exact phrase to cut \
+  or change and state the replacement or the effect it must achieve. Prefer CUT over \
+  rework for stylistic tics.
+- CONSISTENCY notes: fold any consistency finding that is a text-level continuity fix \
+  (a name, a date, a timeline detail) into the relevant SECTION line as an added clause. \
+  Drop any consistency finding that would require moving or merging sections — structure \
+  is out of scope this pass.\
+"""
+
 
 class PlanningAgent(BaseAgent):
     """Converts a raw story idea into a detailed section-by-section narrative plan."""
@@ -187,4 +226,28 @@ class PlanningAgent(BaseAgent):
             "Produce a structured revision plan using the exact format specified."
         )
         output = self._call_claude(REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        return {"agent": "PlanningAgent", "output": output}
+
+    def plan_revision_prose(self, story: str, plan: str,
+                            prose_feedback: str, consistency_feedback: str) -> dict:
+        """Turn prose-editor findings into a forced-all section revision plan.
+
+        Every prose finding must become a SECTION revision; structural ops and
+        general notes are pinned to NONE. Used only by the final prose pass.
+        """
+        section_nums = sorted(int(m) for m in re.findall(r'<<<SECTION\s+(\d+)>>>', story))
+        section_list = (
+            f"Current sections in draft: {', '.join(str(n) for n in section_nums)}"
+            if section_nums
+            else "Current sections in draft: (no section markers found)"
+        )
+        user_prompt = (
+            f"ORIGINAL PLAN:\n{plan}\n\n"
+            f"CURRENT DRAFT:\n{story}\n\n"
+            f"{section_list}\n\n"
+            f"PROSE FINDINGS (every one MUST be fixed):\n{prose_feedback}\n\n"
+            f"CONSISTENCY NOTES (fold in text-level fixes only):\n{consistency_feedback}\n\n"
+            "Produce the structured revision plan using the exact format specified."
+        )
+        output = self._call_claude(PROSE_REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
