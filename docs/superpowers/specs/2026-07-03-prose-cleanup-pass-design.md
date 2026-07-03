@@ -56,6 +56,10 @@ same `ai_writing_failure_modes.md` taxonomy, reframed:
   planner maps fixes by this number; an item without a section number cannot be
   targeted), and a concrete fix direction. No separate priority block — the
   ranked list *is* the priority.
+- **Cite numbered sections only.** Every violation must sit inside a numbered
+  `<<<SECTION N>>>`. Defects in preamble text before section 1 are not fixable by
+  the writer (`revise` skips section 0) — the reviewer must skip them rather than
+  report an untargetable finding.
 
 Returns `{"agent": "AIFailureCheckerAgent", "output": ...}` — same shape as
 `run()`, so the planner consumes it identically.
@@ -68,12 +72,28 @@ used **only** by the prose pass. Same three-block output format as
 `writer.revise` consumes it unchanged. The difference is the instruction:
 
 - **Force-all-N.** Every prose violation in the prose reviewer's ranked list
-  MUST become a `SECTION N:` revision instruction — the planner may not omit or
-  downrank any of them (this overrides the "omit marginal changes" guidance in
-  the generic `plan_revision`). The ranked list is a fix list, not a candidate
-  pool.
-- Consistency feedback is folded in as supporting instructions on the same
-  sections where it applies, but does not displace any prose item.
+  MUST be addressed by a `SECTION N:` revision instruction — the planner may not
+  omit or downrank any of them (this overrides the "omit marginal changes"
+  guidance in the generic `plan_revision`). The ranked list is a fix list, not a
+  candidate pool.
+- **One line per section — merge, never split.** `writer._parse_section_revisions`
+  keys instructions by section number in a dict, so a second `SECTION N:` line for
+  the same N silently overwrites the first. When multiple violations share a
+  section, the planner MUST combine them into a **single** `SECTION N:` line,
+  semicolon-separating the individual fixes. Emitting two lines for the same
+  section drops a forced fix. This is the load-bearing constraint for force-all-N.
+- **STRUCTURAL OPERATIONS = NONE, GENERAL NOTES = NONE.** Every prose fix maps to
+  a numbered section, so all output goes in SECTION REVISIONS. Forcing the other
+  two blocks to NONE (a) keeps every forced fix on the targeted path and (b)
+  avoids `writer`'s full-story fallback rewrite (triggered by any GENERAL NOTES
+  content), which would degrade already-polished sections.
+- **Consistency feedback is folded in as text edits only.** Continuity fixes that
+  are section-content changes (a name slip, a timeline typo) attach as supporting
+  clauses on the relevant `SECTION N:` line and never displace a prose item.
+  Because STRUCTURAL OPERATIONS is pinned to NONE, any consistency finding that
+  would need a MOVE/MERGE (reordering) is **intentionally dropped this pass** —
+  structure is the Middle loop's responsibility; the prose pass only polishes
+  line-level text.
 - Same quoting/self-containment rules as `plan_revision`: quote the exact phrase
   to cut/change, keep each instruction to one line, prefer CUT over rework for
   stylistic tics.
@@ -128,6 +148,11 @@ must happen **after** all prose passes complete, as the final step of `run()`.
   Safe because all three producers (`server.py` → `/save`, `consult_the_council.py`,
   `prompt_harness.py`) receive the story from `council.run()`, which now returns
   it marker-free. `document_writer` receives no marked-up story from any path.
+- **Pre-implementation check:** `/run` now hands the frontend a marker-free story
+  (previously markers survived to the client and were stripped only at `/save`).
+  Grep `static/` for `<<<SECTION` / `SECTION` before implementing — if the UI
+  parses markers for display, adjust it. Expected low risk (frontend shows raw
+  text).
 
 ## Callers
 
@@ -148,7 +173,11 @@ scope for this pass.
 - Unit: `run_prose` returns the expected dict shape; its prompt names the prose
   taxonomy, the surviving-residue framing, and the `top_n` cap. Mock `_call_claude`.
 - Unit: `plan_revision_prose` returns the three-block shape and its prompt
-  carries the force-all-N instruction. Mock `_call_claude`.
+  carries the force-all-N instruction, the merge-same-section rule, and the
+  STRUCTURAL/GENERAL = NONE pins. Mock `_call_claude`.
+- Unit: two prose violations in the same section survive as one `SECTION N:`
+  line through `writer._parse_section_revisions` (guards the overwrite bug) —
+  feed a crafted revision plan, assert both fixes present.
 - Unit: `_run_prose_pass` calls consistency + prose-check + plan_revision_prose +
   revise in order and returns the writer's story. Mock the agents.
 - Unit: `_strip_section_markers` removes `<<<SECTION N>>>` lines; `run()` returns
