@@ -1,1 +1,247 @@
-<!DOCTYPE html><html><body><p>placeholder</p></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Writing Council</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: Georgia, serif; background: #f5f0eb; color: #222; margin: 0; padding: 2rem; }
+  .container { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
+  label { display: block; font-weight: bold; margin-top: 1rem; margin-bottom: 0.25rem; font-size: 0.9rem; }
+  input[type="text"], textarea {
+    width: 100%; padding: 0.5rem; font-family: inherit; font-size: 0.95rem;
+    border: 1px solid #bbb; border-radius: 3px; background: #fff;
+  }
+  textarea { resize: vertical; min-height: 100px; }
+  .optional { font-weight: normal; color: #666; font-size: 0.8rem; margin-left: 0.4rem; }
+  .tabs { display: flex; margin-top: 1rem; }
+  .tab-btn {
+    padding: 0.4rem 1rem; border: 1px solid #bbb; background: #e8e0d8;
+    cursor: pointer; font-size: 0.9rem; border-radius: 3px 3px 0 0;
+    font-family: inherit;
+  }
+  .tab-btn.active { background: #fff; border-bottom-color: #fff; }
+  .tab-panel { border: 1px solid #bbb; padding: 0.75rem; background: #fff; border-radius: 0 3px 3px 3px; }
+  .hidden { display: none !important; }
+  button[type="submit"] {
+    margin-top: 1.5rem; padding: 0.6rem 1.4rem; font-size: 1rem;
+    background: #3a3a3a; color: #fff; border: none; border-radius: 3px;
+    cursor: pointer; font-family: inherit;
+  }
+  button[type="submit"]:disabled { background: #999; cursor: not-allowed; }
+  #download-btn {
+    display: block; margin-top: 0.75rem; padding: 0.6rem 1.4rem; font-size: 1rem;
+    background: #2a6049; color: #fff; border: none; border-radius: 3px;
+    cursor: pointer; font-family: inherit;
+  }
+  #spinner { margin-top: 1.5rem; font-style: italic; color: #555; }
+  #output-section { margin-top: 2rem; }
+  #output-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+  #story-output {
+    width: 100%; min-height: 400px; font-family: "Times New Roman", serif;
+    font-size: 0.95rem; padding: 0.75rem; border: 1px solid #bbb; border-radius: 3px;
+  }
+  .warning {
+    background: #fff8e1; border: 1px solid #f0c040; padding: 0.5rem 0.75rem;
+    border-radius: 3px; font-size: 0.85rem; margin-top: 0.75rem;
+  }
+  #error-msg {
+    margin-top: 1rem; color: #c0392b; background: #fdecea;
+    border: 1px solid #e57373; padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Writing Council</h1>
+
+  <form id="council-form" novalidate>
+    <label for="title">Title *</label>
+    <input type="text" id="title" name="title">
+
+    <label for="author">Author *</label>
+    <input type="text" id="author" name="author">
+
+    <label for="idea">Idea *</label>
+    <textarea id="idea" name="idea" rows="5"></textarea>
+
+    <label for="target_length">Target Length *</label>
+    <input type="text" id="target_length" name="target_length" value="8,000 words">
+
+    <label for="target_audience">Target Audience *</label>
+    <input type="text" id="target_audience" name="target_audience" value="Adult sci-fi readers">
+
+    <label for="world_rules">World Rules <span class="optional">(optional)</span></label>
+    <textarea id="world_rules" name="world_rules" rows="4"></textarea>
+
+    <label for="framework">Framework <span class="optional">(optional)</span></label>
+    <input type="text" id="framework" name="framework" value="Short Story">
+
+    <label for="style_field">Style <span class="optional">(optional)</span></label>
+    <input type="text" id="style_field" name="style_field">
+
+    <label>Image <span class="optional">(optional)</span></label>
+    <div class="tabs">
+      <button type="button" class="tab-btn active" id="tab-upload">Upload</button>
+      <button type="button" class="tab-btn" id="tab-url">URL</button>
+    </div>
+    <div class="tab-panel">
+      <div id="panel-upload">
+        <input type="file" id="image_file" accept="image/jpeg,image/png,image/gif,image/webp">
+      </div>
+      <div id="panel-url" class="hidden">
+        <input type="text" id="image_url" placeholder="https://example.com/image.png">
+      </div>
+    </div>
+
+    <button type="submit" id="run-btn">Run Council</button>
+  </form>
+
+  <div id="spinner" class="hidden">&#8635; Council is working&hellip; (this may take several minutes)</div>
+  <div id="error-msg" class="hidden"></div>
+
+  <div id="output-section" class="hidden">
+    <h2>Output</h2>
+    <textarea id="story-output" readonly></textarea>
+    <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
+    <button id="download-btn">Download .docx</button>
+  </div>
+</div>
+
+<script>
+  const form         = document.getElementById('council-form');
+  const runBtn       = document.getElementById('run-btn');
+  const spinner      = document.getElementById('spinner');
+  const errorMsg     = document.getElementById('error-msg');
+  const outputSection = document.getElementById('output-section');
+  const storyOutput  = document.getElementById('story-output');
+  const downloadBtn  = document.getElementById('download-btn');
+  const tabUpload    = document.getElementById('tab-upload');
+  const tabUrl       = document.getElementById('tab-url');
+  const panelUpload  = document.getElementById('panel-upload');
+  const panelUrl     = document.getElementById('panel-url');
+
+  // --- Image tab switching ---
+  tabUpload.addEventListener('click', () => {
+    tabUpload.classList.add('active');
+    tabUrl.classList.remove('active');
+    panelUpload.classList.remove('hidden');
+    panelUrl.classList.add('hidden');
+  });
+  tabUrl.addEventListener('click', () => {
+    tabUrl.classList.add('active');
+    tabUpload.classList.remove('active');
+    panelUrl.classList.remove('hidden');
+    panelUpload.classList.add('hidden');
+  });
+
+  // --- Helpers ---
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.classList.remove('hidden');
+    spinner.classList.add('hidden');
+    runBtn.disabled = false;
+  }
+
+  function buildPayload(imageDataUrl) {
+    const payload = {
+      idea:             document.getElementById('idea').value.trim(),
+      target_length:    document.getElementById('target_length').value.trim(),
+      target_audience:  document.getElementById('target_audience').value.trim(),
+      world_rules:      document.getElementById('world_rules').value.trim(),
+      framework:        document.getElementById('framework').value.trim(),
+      style:            document.getElementById('style_field').value.trim(),
+    };
+    const uploadActive = !panelUpload.classList.contains('hidden');
+    if (uploadActive) {
+      const file = document.getElementById('image_file').files[0];
+      if (file && imageDataUrl) {
+        payload.image_file     = imageDataUrl;   // full data URI — server strips prefix
+        payload.image_filename = file.name;      // preserves extension for MIME detection
+      }
+    } else {
+      const url = document.getElementById('image_url').value.trim();
+      if (url) payload.image_url = url;
+    }
+    return payload;
+  }
+
+  function submitPayload(payload) {
+    errorMsg.classList.add('hidden');
+    runBtn.disabled = true;
+    spinner.classList.remove('hidden');
+    outputSection.classList.add('hidden');
+
+    fetch('/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(r => r.json())
+      .then(data => {
+        spinner.classList.add('hidden');
+        if (data.error) { showError(data.error); return; }
+        storyOutput.value = data.story;
+        outputSection.classList.remove('hidden');
+        runBtn.disabled = false;
+      })
+      .catch(err => showError('Network error: ' + err.message));
+  }
+
+  // --- Form submit ---
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const REQUIRED = [
+      ['title',           'Title'],
+      ['author',          'Author'],
+      ['idea',            'Idea'],
+      ['target_length',   'Target Length'],
+      ['target_audience', 'Target Audience'],
+    ];
+    for (const [id, label] of REQUIRED) {
+      if (!document.getElementById(id).value.trim()) {
+        showError('"' + label + '" is required.');
+        return;
+      }
+    }
+    const uploadActive = !panelUpload.classList.contains('hidden');
+    const file = document.getElementById('image_file').files[0];
+    if (uploadActive && file) {
+      const reader = new FileReader();
+      reader.onload = evt => submitPayload(buildPayload(evt.target.result));
+      reader.readAsDataURL(file);
+    } else {
+      submitPayload(buildPayload(null));
+    }
+  });
+
+  // --- Download ---
+  downloadBtn.addEventListener('click', () => {
+    const title  = document.getElementById('title').value.trim();
+    const author = document.getElementById('author').value.trim();
+    fetch('/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ story: storyOutput.value, title, author }),
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('Save failed (' + r.status + ')');
+        return r.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href     = url;
+        a.download = title + '.docx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(err => showError('Download failed: ' + err.message));
+  });
+</script>
+</body>
+</html>
