@@ -26,17 +26,18 @@ Flask application with three routes:
 ```json
 {
   "idea": "...",
-  "title": "...",
-  "author": "...",
   "target_length": "8,000 words",
   "target_audience": "Adult sci-fi readers",
   "world_rules": "",
   "framework": "Short Story",
   "style": "",
   "image_url": "",
-  "image_file": "<base64-encoded bytes or omitted>"
+  "image_file": "<base64-encoded bytes or omitted>",
+  "image_filename": "world.png"
 }
 ```
+
+`title` and `author` are not included — `WritingCouncil.run()` does not use them. The client sends them directly to `/save` from the form values it already holds.
 
 **`/run` response shape:**
 ```json
@@ -47,7 +48,7 @@ Flask application with three routes:
 ```
 
 Image handling in `/run`:
-- If `image_file` is present (base64): decode, write to a temp file, pass path to `WritingCouncil.run(image=...)`, delete temp file after.
+- If `image_file` is present (base64): decode, write to a temp file using the extension from `image_filename` (e.g. `.png`) so `_IMAGE_MEDIA_TYPES` can determine the MIME type, pass path to `WritingCouncil.run(image=...)`, delete temp file in a `finally` block.
 - If `image_url` is present: pass URL string directly to `WritingCouncil.run(image=...)`.
 - Both take the same `image` parameter on `WritingCouncil.run()` — no changes to the orchestrator needed.
 
@@ -65,7 +66,7 @@ Flask runs on `localhost:5000` by default. Start with `python server.py`. Must u
 `save_as_manuscript` gains an optional `output` parameter:
 
 ```python
-def save_as_manuscript(story, title, author, output_path=None, output=None) -> str | bytes:
+def save_as_manuscript(story, title, author, output_path=None, output=None) -> "str | io.BytesIO":
 ```
 
 - If `output_path` is given: existing behaviour — saves to file, returns the path string.
@@ -98,8 +99,6 @@ Single self-contained file: HTML + embedded `<style>` + embedded `<script>`. No 
 │  Style            [                       ] │
 │  Image   [ Upload ] [ URL ]                 │
 │           [Choose file...] or [https://...] │
-│  ⚠ Output is not saved — download before   │
-│    closing this tab.                        │
 │                                             │
 │  [ Run Council ]                            │
 ├─────────────────────────────────────────────┤
@@ -110,6 +109,8 @@ Single self-contained file: HTML + embedded `<style>` + embedded `<script>`. No 
 │  ┌───────────────────────────────────────┐  │
 │  │ story text appears here...            │  │
 │  └───────────────────────────────────────┘  │
+│  ⚠ Output is not saved — download before   │
+│    closing this tab.                        │
 │  [ Download .docx ]                         │
 │  (hidden until story ready)                 │
 └─────────────────────────────────────────────┘
@@ -135,7 +136,7 @@ Single self-contained file: HTML + embedded `<style>` + embedded `<script>`. No 
 
 1. User fills form, clicks **Run Council**.
 2. JS validates required fields client-side (non-empty check). Shows inline error if missing.
-3. If image file selected: read as base64 via `FileReader`, include in JSON payload as `image_file`.
+3. If image file selected: read as base64 via `FileReader`, include in JSON payload as `image_file` and `image_filename` (original filename, used to preserve extension for MIME detection).
 4. `POST /run` sent. Button disabled, spinner shown.
 5. Response arrives (may take several minutes). Spinner hidden.
 6. Story text populated in output `<textarea>`. **Download .docx** button appears. Warning banner shown: "Output is not saved — download before closing this tab."
