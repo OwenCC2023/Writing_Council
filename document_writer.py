@@ -1,4 +1,5 @@
 import io
+import re
 
 from docx import Document
 from docx.shared import Pt, Inches
@@ -67,6 +68,7 @@ def save_as_manuscript(
     _add_page_number(hdr_para)
 
     # --- Body paragraphs ---
+    story = re.sub(r'<<<SECTION\s+\d+>>>\n?', '', story)
     chunks = [c.strip() for c in story.split("\n\n") if c.strip()]
 
     for chunk in chunks:

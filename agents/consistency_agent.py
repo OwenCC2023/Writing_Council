@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 SYSTEM_PROMPT = """\
 You are a skeptical continuity editor. Your default assumption is that something is wrong \
@@ -27,16 +27,32 @@ Then check for violations:
 - Motivation inconsistencies (a character acting against their established core drive \
   without a credible reason shown in the text)
 
+Also check world consistency: the story establishes its own rules — technology, physics, \
+social structures, what characters can and cannot do. Extract those rules from what the \
+text establishes, then flag any later passage that quietly violates them.
+
 Do not give the story the benefit of the doubt. If something seems off, flag it even if you \
 can construct a charitable interpretation. Your job is to surface problems, not to defend choices.
 
-Be specific: quote the relevant passage, identify the exact nature of the inconsistency, \
-and explain what information in the text contradicts it.\
+Every finding must be evidenced: quote the passage that establishes the fact AND the \
+passage that contradicts it. If you cannot quote both, it is not a finding — do not \
+report suspicions you cannot ground in the text. Finding nothing is an acceptable result; \
+inventing problems to satisfy skepticism is not.
+
+Format each finding as:
+- Section number(s) involved, using the <<<SECTION N>>> markers in the draft
+- The two quoted passages
+- One sentence naming the exact contradiction
+
+Order findings by severity: contradictions a reader would notice first.\
 """
 
 
 class ConsistencyAgent(BaseAgent):
     """Reviews a story for internal consistency — timeline, character, and logic. Critical eye."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
 
     def run(self, story: str) -> dict:
         user_prompt = f"STORY:\n{story}\n\nReview this story for all internal consistency problems."

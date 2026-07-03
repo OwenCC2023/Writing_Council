@@ -5,7 +5,29 @@
       "Bash(grep -r 'class WritingCouncil' . --include=*.py)",
       "Bash(git pull:*)",
       "Bash(.venv/Scripts/pip.exe install:*)",
-      "Bash(.venv/Scripts/python.exe document_writer.py)"
+      "Bash(.venv/Scripts/python.exe document_writer.py)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(git push:*)",
+      "Bash(grep -E \"^-.*\\\\.py$\")",
+      "Bash(git checkout *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 7281850564797bdc37b6c1be550903ba6384b976 5acbd5b6b0556ea3c5baa5145876c144afb33e8b)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 4dee15032e10b3bf37e3b8692354e33e35235bb2 5acbd5b6b0556ea3c5baa5145876c144afb33e8b)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\task-brief\" docs/superpowers/plans/2026-07-02-prompt-harness.md 2)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 5acbd5b6b0556ea3c5baa5145876c144afb33e8b HEAD)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Start-Sleep -Seconds 2; try { $r = Invoke-WebRequest -Uri \"http://localhost:5000\" -UseBasicParsing; \"Status: $\\($r.StatusCode\\)\"; if \\($r.Content -match 'Writing Council'\\) { 'Title found: YES' } else { 'Title found: NO' }; if \\($r.Content -match 'Run Council'\\) { 'Run button found: YES' } else { 'Run button found: NO' }; if \\($r.Content -match 'tab-upload'\\) { 'Tabs found: YES' } else { 'Tabs found: NO' } } catch { \"Error: $_\" })",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(git log *)",
+      "PowerShell(git *)",
+      "PowerShell(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['agents/planning_agent.py','agents/writer_agent.py','agents/consistency_agent.py','agents/ai_failure_checker.py','agents/peer_writer_agent.py','agents/editor_agent.py','agents/marketing_agent.py','agents/audience_agent.py','agents/character_agent.py']]; print\\('all parse OK'\\)\")",
+      "PowerShell(netstat *)",
+      "PowerShell(git show feature/prompt-harness:server.py | python -c \"import sys; exec\\(compile\\(sys.stdin.read\\(\\), 'server.py', 'exec'\\)\\)\" 2>&1 | Select-Object -First 5)",
+      "PowerShell(head *)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'C:\\\\Users\\\\miloc\\\\Documents\\\\Github\\\\Writing_Council'; .venv\\\\Scripts\\\\python.exe server.py\" -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 3; try { $r = Invoke-WebRequest -Uri \"http://localhost:5000/\" -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $_\" })"
     ]
   }
 }
