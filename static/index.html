@@ -106,7 +106,7 @@
     <h2>Output</h2>
     <textarea id="story-output" readonly></textarea>
     <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
-    <button id="download-btn">Download .docx</button>
+    <button type="button" id="download-btn">Download .docx</button>
   </div>
 </div>
 
@@ -211,6 +211,7 @@
     if (uploadActive && file) {
       const reader = new FileReader();
       reader.onload = evt => submitPayload(buildPayload(evt.target.result));
+      reader.onerror = () => showError('Could not read the selected image file.');
       reader.readAsDataURL(file);
     } else {
       submitPayload(buildPayload(null));

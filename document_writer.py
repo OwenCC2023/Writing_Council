@@ -36,7 +36,7 @@ def save_as_manuscript(
     Format: Times New Roman 12pt, double-spaced, 1" margins, 0.5" first-line
     indent, running header: Author / TITLE / page number.
 
-    Returns the output_path that was written.
+    Returns output_path (str) if writing to a file, or the BytesIO buffer seeked to 0.
     """
     doc = Document()
 

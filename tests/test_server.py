@@ -74,6 +74,28 @@ def test_run_returns_500_on_exception(client):
     assert "council exploded" in data["error"]
 
 
+def test_run_with_image_file(client):
+    import base64
+    # 1x1 PNG data URI
+    data_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "x", "log": []}
+        resp = client.post(
+            "/run",
+            data=json.dumps({
+                "idea": "Test",
+                "target_length": "1,000 words",
+                "target_audience": "Testers",
+                "image_file": data_uri,
+                "image_filename": "test.png",
+            }),
+            content_type="application/json",
+        )
+    assert resp.status_code == 200
+    call_kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert call_kwargs["image"] != ""   # temp file path was passed
+
+
 def test_save_returns_docx_bytes(client):
     resp = client.post(
         "/save",

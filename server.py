@@ -57,21 +57,26 @@ def run():
 
 @app.route("/save", methods=["POST"])
 def save():
-    data = request.get_json()
-    buf = io.BytesIO()
-    save_as_manuscript(
-        story=data["story"],
-        title=data["title"],
-        author=data["author"],
-        output=buf,
-    )
-    filename = f"{data['title']}.docx"
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name=filename,
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({"error": "Invalid JSON body"}), 400
+        buf = io.BytesIO()
+        save_as_manuscript(
+            story=data["story"],
+            title=data["title"],
+            author=data["author"],
+            output=buf,
+        )
+        filename = f"{data['title']}.docx"
+        return send_file(
+            buf,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 if __name__ == "__main__":
