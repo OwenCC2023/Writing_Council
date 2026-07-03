@@ -9,7 +9,19 @@
       "Bash(git add:*)",
       "Bash(git commit -m ':*)",
       "Bash(git push:*)",
-      "Bash(grep -E \"^-.*\\\\.py$\")"
+      "Bash(grep -E \"^-.*\\\\.py$\")",
+      "Bash(git checkout *)",
+      "Bash(git restore *)",
+      "Bash(git commit *)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 7281850564797bdc37b6c1be550903ba6384b976 5acbd5b6b0556ea3c5baa5145876c144afb33e8b)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 4dee15032e10b3bf37e3b8692354e33e35235bb2 5acbd5b6b0556ea3c5baa5145876c144afb33e8b)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\task-brief\" docs/superpowers/plans/2026-07-02-prompt-harness.md 2)",
+      "Bash(bash \"C:\\\\Users\\\\miloc\\\\.claude\\\\plugins\\\\cache\\\\claude-plugins-official\\\\superpowers\\\\6.0.3\\\\skills\\\\subagent-driven-development\\\\scripts\\\\review-package\" 5acbd5b6b0556ea3c5baa5145876c144afb33e8b HEAD)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Start-Sleep -Seconds 2; try { $r = Invoke-WebRequest -Uri \"http://localhost:5000\" -UseBasicParsing; \"Status: $\\($r.StatusCode\\)\"; if \\($r.Content -match 'Writing Council'\\) { 'Title found: YES' } else { 'Title found: NO' }; if \\($r.Content -match 'Run Council'\\) { 'Run button found: YES' } else { 'Run button found: NO' }; if \\($r.Content -match 'tab-upload'\\) { 'Tabs found: YES' } else { 'Tabs found: NO' } } catch { \"Error: $_\" })",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(git log *)",
+      "PowerShell(git *)"
     ]
   }
 }
