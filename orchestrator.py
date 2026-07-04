@@ -67,7 +67,7 @@ class WritingCouncil:
         world_rules: str = "",
         framework: str = "",
         style: str = "",
-        image: str = "",
+        image: str | list = "",
         prose_passes: int = 1,
         prose_top_n: int = 5,
     ) -> dict:
@@ -80,9 +80,10 @@ class WritingCouncil:
             world_rules: Optional text describing deviations from the real world.
             framework: Optional structural template (e.g. "Short Story").
             style: Optional prose style keyword.
-            image: Optional path to a local image file or an http/https URL. When
-                provided, the PlanningAgent will examine the image and deduce the
-                world's rules from its visual content before constructing the plan.
+            image: Optional path to a local image file or an http/https URL, or a
+                list of such strings for multiple images. When provided, the
+                PlanningAgent will examine the image(s) and deduce the world's
+                rules from their visual content before constructing the plan.
             prose_passes: Number of final line-level prose-cleanup passes to run
                 after the middle loop (default 1).
             prose_top_n: Number of most-egregious prose violations the prose-mode
@@ -141,7 +142,7 @@ class WritingCouncil:
         world_rules: str = "",
         framework: str = "",
         style: str = "",
-        image: str = "",
+        image: str | list = "",
         plan: str = None,
         story: str = None,
         middle_feedbacks: list = None,
@@ -152,13 +153,14 @@ class WritingCouncil:
         if idea is not None:
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
+            image_desc = ", ".join(image) if isinstance(image, list) else image
             input_text = (
                 f"idea: {idea}\ntarget_length: {target_length}\n"
                 f"target_audience: {target_audience}\n"
                 f"world_rules: {world_rules or '(none)'}\n"
                 f"framework: {framework or '(none)'}\n"
                 f"style: {style or '(none)'}\n"
-                f"image: {image or '(none)'}"
+                f"image: {image_desc or '(none)'}"
             )
             self._log_start(f"{label}.plan", "PlanningAgent", input_text)
             result = self.planner.run(

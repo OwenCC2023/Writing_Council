@@ -45,31 +45,37 @@ class BaseAgent:
         self,
         system_prompt: str,
         user_prompt: str,
-        image: str,
+        images: str | list,
         model: str = None,
         max_tokens: int = 8192,
     ) -> str:
-        """Send a multimodal prompt (image + text) to Claude and return the text response.
+        """Send a multimodal prompt (one or more images + text) to Claude and return
+        the text response.
 
         Args:
-            image: Either a file path to a local image or an http/https URL.
+            images: A file path or http/https URL, or a list of such strings.
         """
-        if image.startswith(("http://", "https://")):
-            image_block = {
-                "type": "image",
-                "source": {"type": "url", "url": image},
-            }
-        else:
-            path = Path(image)
-            media_type = _IMAGE_MEDIA_TYPES.get(path.suffix.lower(), "image/jpeg")
-            with open(path, "rb") as fh:
-                data = base64.standard_b64encode(fh.read()).decode("utf-8")
-            image_block = {
-                "type": "image",
-                "source": {"type": "base64", "media_type": media_type, "data": data},
-            }
+        if isinstance(images, str):
+            images = [images]
 
-        content = [image_block, {"type": "text", "text": user_prompt}]
+        image_blocks = []
+        for image in images:
+            if image.startswith(("http://", "https://")):
+                image_blocks.append({
+                    "type": "image",
+                    "source": {"type": "url", "url": image},
+                })
+            else:
+                path = Path(image)
+                media_type = _IMAGE_MEDIA_TYPES.get(path.suffix.lower(), "image/jpeg")
+                with open(path, "rb") as fh:
+                    data = base64.standard_b64encode(fh.read()).decode("utf-8")
+                image_blocks.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": media_type, "data": data},
+                })
+
+        content = [*image_blocks, {"type": "text", "text": user_prompt}]
         response = self.client.messages.create(
             model=model or self.model,
             max_tokens=max_tokens,

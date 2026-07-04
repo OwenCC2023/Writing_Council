@@ -94,6 +94,32 @@
     margin-top: 1rem; color: var(--err-fg); background: var(--err-bg);
     border: 1px solid var(--err-bdr); padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
   }
+  .thumb-strip {
+    display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem;
+  }
+  .thumb {
+    position: relative; width: 84px;
+  }
+  .thumb img {
+    width: 84px; height: 84px; object-fit: cover; border: 1px solid var(--border);
+    border-radius: 3px; display: block; background: var(--bg-input);
+  }
+  .thumb-name {
+    font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .thumb-remove {
+    position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
+    border-radius: 50%; border: 1px solid var(--err-bdr); background: var(--err-bg);
+    color: var(--err-fg); cursor: pointer; font-size: 0.75rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    font-family: inherit;
+  }
+  #remove-all-btn {
+    margin-top: 0.6rem; padding: 0.3rem 0.7rem; font-size: 0.8rem;
+    background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 3px; cursor: pointer; font-family: inherit;
+  }
 </style>
 </head>
 <body>
@@ -135,7 +161,9 @@
     </div>
     <div class="tab-panel">
       <div id="panel-upload">
-        <input type="file" id="image_file" accept="image/jpeg,image/png,image/gif,image/webp">
+        <input type="file" id="image_file" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
+        <div class="thumb-strip hidden" id="thumb-strip"></div>
+        <button type="button" id="remove-all-btn" class="hidden">Remove all</button>
       </div>
       <div id="panel-url" class="hidden">
         <input type="text" id="image_url" placeholder="https://example.com/image.png">
@@ -178,6 +206,67 @@
   const tabUrl       = document.getElementById('tab-url');
   const panelUpload  = document.getElementById('panel-upload');
   const panelUrl     = document.getElementById('panel-url');
+  const imageInput   = document.getElementById('image_file');
+  const thumbStrip   = document.getElementById('thumb-strip');
+  const removeAllBtn = document.getElementById('remove-all-btn');
+
+  // --- Uploaded photos (multi-file, removable before submit) ---
+  let uploadedPhotos = []; // array of File objects
+  let thumbUrls = [];      // parallel array of object URLs, for cleanup
+
+  function renderThumbs() {
+    thumbUrls.forEach(u => URL.revokeObjectURL(u));
+    thumbUrls = uploadedPhotos.map(f => URL.createObjectURL(f));
+    thumbStrip.innerHTML = '';
+    uploadedPhotos.forEach((file, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+
+      const img = document.createElement('img');
+      img.src = thumbUrls[i];
+      img.alt = file.name;
+      thumb.appendChild(img);
+
+      const name = document.createElement('div');
+      name.className = 'thumb-name';
+      name.textContent = file.name;
+      thumb.appendChild(name);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'thumb-remove';
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', 'Remove ' + file.name);
+      removeBtn.addEventListener('click', () => {
+        uploadedPhotos.splice(i, 1);
+        renderThumbs();
+      });
+      thumb.appendChild(removeBtn);
+
+      thumbStrip.appendChild(thumb);
+    });
+    thumbStrip.classList.toggle('hidden', uploadedPhotos.length === 0);
+    removeAllBtn.classList.toggle('hidden', uploadedPhotos.length === 0);
+  }
+
+  function isDuplicate(file) {
+    return uploadedPhotos.some(f =>
+      f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
+    );
+  }
+
+  imageInput.addEventListener('change', () => {
+    for (const file of imageInput.files) {
+      if (!isDuplicate(file)) uploadedPhotos.push(file);
+    }
+    imageInput.value = ''; // allow re-adding a removed file
+    renderThumbs();
+  });
+
+  removeAllBtn.addEventListener('click', () => {
+    uploadedPhotos = [];
+    renderThumbs();
+  });
 
   // --- Image tab switching ---
   tabUpload.addEventListener('click', () => {
@@ -201,7 +290,16 @@
     runBtn.disabled = false;
   }
 
-  function buildPayload(imageDataUrl) {
+  function readAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read "' + file.name + '".'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function buildPayload(imageFilesPayload) {
     const payload = {
       idea:             document.getElementById('idea').value.trim(),
       target_length:    document.getElementById('target_length').value.trim(),
@@ -212,10 +310,8 @@
     };
     const uploadActive = !panelUpload.classList.contains('hidden');
     if (uploadActive) {
-      const file = document.getElementById('image_file').files[0];
-      if (file && imageDataUrl) {
-        payload.image_file     = imageDataUrl;   // full data URI — server strips prefix
-        payload.image_filename = file.name;      // preserves extension for MIME detection
+      if (imageFilesPayload && imageFilesPayload.length) {
+        payload.image_files = imageFilesPayload;   // [{data, filename}, ...]
       }
     } else {
       const url = document.getElementById('image_url').value.trim();
@@ -263,12 +359,12 @@
       }
     }
     const uploadActive = !panelUpload.classList.contains('hidden');
-    const file = document.getElementById('image_file').files[0];
-    if (uploadActive && file) {
-      const reader = new FileReader();
-      reader.onload = evt => submitPayload(buildPayload(evt.target.result));
-      reader.onerror = () => showError('Could not read the selected image file.');
-      reader.readAsDataURL(file);
+    if (uploadActive && uploadedPhotos.length) {
+      Promise.all(uploadedPhotos.map(file =>
+        readAsDataURL(file).then(data => ({ data, filename: file.name }))
+      ))
+        .then(imageFilesPayload => submitPayload(buildPayload(imageFilesPayload)))
+        .catch(err => showError(err.message));
     } else {
       submitPayload(buildPayload(null));
     }
