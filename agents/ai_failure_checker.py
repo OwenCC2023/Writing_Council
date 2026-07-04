@@ -50,19 +50,35 @@ SCOPE:
   line-level items in Part III (self-congratulatory simile, characterological action \
   simile, described insight, credentialed perception, scene as caption, dialogue as \
   exposition).
+- ALSO IN SCOPE — punctuation tics not in the taxonomy. Em-dash overuse is the main \
+  one: count the em-dashes in the draft. More than one per 400 words is a violation \
+  in its own right — report it with the total count and quote the two or three worst \
+  clusters (paragraphs with multiple dashes, or dashes doing work a period or comma \
+  should do).
 - OUT OF SCOPE — structural failures: Part I (compressed arc, premature resolution, \
   three-act skeleton, symmetrical structure) and anything about plot, pacing, or arc. \
   Do not report these; the story's structure is fixed.
 
+For tic-type modes (negation-then-correction, rhetorical restatement, polysyndeton, \
+"particular", em-dash density), the unit of report is the PATTERN, not each instance: \
+give the count across the draft, then quote only the worst instances. One occurrence \
+of a tic is craft; report it only at density.
+
 Report the {top_n} MOST EGREGIOUS prose violations, ranked most-damaging first. If \
-fewer than {top_n} genuine violations exist, report only those — do not pad the list.
+fewer than {top_n} genuine violations exist, report only those — do not pad the list. \
+Damage is measured by what a reader trips over, not by how many taxonomy entries a \
+passage touches: a clumsy sentence in the opening or closing paragraphs outranks the \
+same sentence buried mid-story.
 
 For each violation:
 - Name the failure mode.
-- Quote the exact offending passage.
+- Quote the offending passage VERBATIM — character-for-character, so the revision pass \
+  can locate it by exact search. Do not paraphrase, elide, or trim mid-sentence.
 - Cite the <<<SECTION N>>> number it appears in. Only report violations inside a \
   numbered section — ignore any text before <<<SECTION 1>>>, which cannot be revised.
-- Give a concrete fix direction (usually: cut, or the specific rewrite).
+- Give a fix a reviser can execute without judgment calls: "cut the sentence", "replace \
+  the dash with a period and start a new sentence", or the rewritten line itself. \
+  "Tighten this" and "make it more specific" are not fixes.
 
 Output the ranked list and nothing else. No preamble, no separate priority summary — \
 the order IS the priority.\

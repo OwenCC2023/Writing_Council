@@ -53,6 +53,12 @@ similes that generalize ("quiet in the way that houses with children are quiet")
 was X and she was Y and" accumulation. Naming an emotion ("she felt a deep sadness") is \
 never the strongest option — render what the body does instead.
 
+The em-dash is also a reflex. Treat it as a scarce resource: no more than one em-dash \
+per 400 words, and never two in the same paragraph. Before typing one, try the sentence \
+with a period, a comma, a colon, or restructured into two sentences — one of those is \
+almost always stronger. Reserve the em-dash for genuine interruption or a turn the \
+sentence could not survive any other way.
+
 Divide your story into logical sections. Begin each section with a marker on its own line \
 in this exact format: <<<SECTION N>>> (N starts at 1, increments by 1). Match the plan's \
 section numbering — plan section N becomes draft <<<SECTION N>>>. Use scene shifts, \
@@ -71,6 +77,8 @@ Apply the same discipline as the initial write:
 - End when the work is done. Do not add closing sentences that explain what just happened.
 - Characters do not say what they mean directly. Cut dialogue that explains the scene or theme.
 - When feedback can be addressed by cutting or by adding, prefer cutting.
+- Ration em-dashes: at most one per 400 words, never two in a paragraph. When revising a
+  sentence that has one, try a period, comma, or colon first.
 
 You are seeing only the sections under revision, not the rest of the draft. The unseen \
 neighboring sections connect to these at their current first and last beats — keep each \
@@ -99,6 +107,8 @@ Apply the same discipline as the initial write:
 - End when the work is done. Do not add closing sentences that explain what just happened.
 - Characters do not say what they mean directly. Cut dialogue that explains the scene or theme.
 - When revision notes can be addressed by cutting or by adding, prefer cutting.
+- Ration em-dashes: at most one per 400 words, never two in a paragraph. When revising a
+  sentence that has one, try a period, comma, or colon first.
 
 Do not explain your changes — just write the improved story. Preserve the \
 <<<SECTION N>>> markers from the original draft in your revised output.\
