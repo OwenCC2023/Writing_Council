@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from agents.writer_agent import WriterAgent
+from agents.writer_agent import WriterAgent, SYSTEM_PROMPT
 
 
 def test_run_threads_model_override_to_call():
@@ -44,3 +44,31 @@ def test_two_lines_same_section_second_overwrites_first():
         "=== GENERAL NOTES ===\nNONE"
     )
     assert revisions[3] == "fix B"
+
+
+def test_run_earth_prompt_unchanged_and_no_model():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="PLAN")
+    assert m.call_args.args[0] == SYSTEM_PROMPT           # byte-identical
+    assert m.call_args.kwargs.get("model") is None
+
+
+def test_run_non_earth_injects_world_and_model():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="PLAN", model="claude-opus-4-8",
+                  canon_sheet="halved gravity", world_bible="smells of iron")
+    sp = m.call_args.args[0]
+    assert sp != SYSTEM_PROMPT
+    assert "halved gravity" in sp and "smells of iron" in sp
+    assert m.call_args.kwargs["model"] == "claude-opus-4-8"
+
+
+def test_revise_forwards_model_on_fallback():
+    agent = WriterAgent()
+    # No section markers -> fallback rewrite path, single _call_claude.
+    with patch.object(agent, "_call_claude", return_value="revised") as m:
+        agent.revise(plan="p", story="no markers", feedback="notes",
+                     model="claude-opus-4-8")
+    assert m.call_args.kwargs["model"] == "claude-opus-4-8"
