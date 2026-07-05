@@ -18,6 +18,7 @@ def test_run_splits_canon_and_bible_and_uses_opus():
     assert "Gravity is half Earth-normal." not in result["world_bible"]
     assert "hot iron and ozone" in result["world_bible"]
     assert "===" not in result["canon_sheet"]
+    assert result["canon_sheet"] == "Gravity is half Earth-normal."
     # Opus, with headroom above the 8192 default so neither block truncates.
     assert m.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
     assert m.call_args.kwargs["max_tokens"] > 8192

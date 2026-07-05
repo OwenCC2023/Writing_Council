@@ -61,7 +61,7 @@ class WorldBuilderAgent(BaseAgent):
     def _split(text: str) -> tuple:
         """Split on the two headers. Returns (canon_sheet, world_bible)."""
         canon = re.search(
-            r'===\s*CANON SHEET\s*===\s*(.*?)(?===\s*WORLD BIBLE\s*===|$)',
+            r'===\s*CANON SHEET\s*===\s*(.*?)(?=\s*===\s*WORLD BIBLE\s*===|\Z)',
             text, re.IGNORECASE | re.DOTALL)
         bible = re.search(
             r'===\s*WORLD BIBLE\s*===\s*(.*)$', text, re.IGNORECASE | re.DOTALL)
