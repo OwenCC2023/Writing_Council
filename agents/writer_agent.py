@@ -124,12 +124,13 @@ class WriterAgent(BaseAgent):
     # Public interface
     # ------------------------------------------------------------------
 
-    def run(self, plan: str) -> dict:
+    def run(self, plan: str, model: str = None) -> dict:
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             "Write the full story based on this plan."
         )
         output = self._call_claude(SYSTEM_PROMPT, user_prompt,
+                                   model=model,
                                    max_tokens=INITIAL_WRITE_MAX_TOKENS)
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 

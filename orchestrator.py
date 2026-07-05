@@ -13,6 +13,7 @@ from agents import (
     MarketingAgent,
     AudienceAgent,
 )
+from agents.base_agent import INITIAL_DRAFT_MODEL
 
 LOGS_DIR = Path(__file__).parent / "logs"
 
@@ -171,13 +172,14 @@ class WritingCouncil:
                 framework=framework,
                 style=style,
                 image=image,
+                model=INITIAL_DRAFT_MODEL,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
 
             print(f"[{label}] Running WriterAgent (initial write)...")
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
-            write_result = self.writer.run(plan=plan)
+            write_result = self.writer.run(plan=plan, model=INITIAL_DRAFT_MODEL)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 

@@ -187,6 +187,7 @@ class PlanningAgent(BaseAgent):
         framework: str = "",
         style: str = "",
         image: str | list = "",
+        model: str = None,
     ) -> dict:
         user_prompt = f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
         if world_rules:
@@ -200,9 +201,9 @@ class PlanningAgent(BaseAgent):
         system_prompt = SYSTEM_PROMPT + (IMAGE_PROMPT_ADDENDUM if image else "")
 
         if image:
-            output = self._call_claude_with_image(system_prompt, user_prompt, image)
+            output = self._call_claude_with_image(system_prompt, user_prompt, image, model=model)
         else:
-            output = self._call_claude(system_prompt, user_prompt)
+            output = self._call_claude(system_prompt, user_prompt, model=model)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:

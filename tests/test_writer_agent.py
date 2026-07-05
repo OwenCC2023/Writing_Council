@@ -1,4 +1,20 @@
+from unittest.mock import patch
+
 from agents.writer_agent import WriterAgent
+
+
+def test_run_threads_model_override_to_call():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p", model="claude-opus-4-8")
+    assert m.call_args.kwargs["model"] == "claude-opus-4-8"
+
+
+def test_run_defaults_model_to_none():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p")
+    assert m.call_args.kwargs["model"] is None
 
 
 def test_single_line_semicolon_fixes_both_survive():

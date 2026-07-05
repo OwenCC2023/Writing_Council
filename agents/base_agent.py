@@ -8,6 +8,9 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 FEEDBACK_MODEL = "claude-haiku-4-5-20251001"
+# Model for the initial plan + initial write only (Outer's first inner call).
+# Revisions and reviewers keep their own models.
+INITIAL_DRAFT_MODEL = "claude-opus-4-8"
 
 _IMAGE_MEDIA_TYPES = {
     ".jpg": "image/jpeg",
