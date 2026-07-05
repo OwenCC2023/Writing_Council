@@ -188,6 +188,21 @@ HARD RULES FOR THIS PASS:
   is out of scope this pass.\
 """
 
+_REVISION_BUCKET_CLAUSE = """\
+
+BUCKETED FEEDBACK: reviewers may tag findings [CRAFT] or [WORLD]. Fix [CRAFT] findings. \
+Treat [WORLD] findings as authorial intent for a deliberately non-Earth world — act on one \
+only if it names an actual contradiction, never merely because a passage "reads strange".\
+"""
+
+_PROSE_BUCKET_CLAUSE = """\
+
+BUCKETED FEEDBACK: findings may be tagged [CRAFT] or [WORLD]. Force-fix every [CRAFT] \
+finding as instructed above. DROP any [WORLD]-tagged "reads strange" finding even though \
+this pass otherwise forces all findings — the world's strangeness is intentional. Still \
+fold in [WORLD] findings that are genuine text-level contradictions.\
+"""
+
 BIBLE_REVISION_SYSTEM_PROMPT = """\
 You are a story architect revising a narrative plan now that the story's world has been \
 fully precomputed. You are given the original plan, a CANON SHEET of the world's rules, and \
@@ -237,13 +252,14 @@ class PlanningAgent(BaseAgent):
             output = self._call_claude(system_prompt, user_prompt, model=model)
         return {"agent": "PlanningAgent", "output": output}
 
-    def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:
+    def plan_revision(self, story: str, plan: str, feedbacks: list, non_earth: bool = False) -> dict:
         """Synthesize feedback from multiple reviewers into a structured revision plan.
 
         Args:
             story: The current draft (may contain <<<SECTION N>>> markers).
             plan: The original narrative plan the story was built from.
             feedbacks: List of feedback strings from different reviewer agents.
+            non_earth: If True, append bucket-handling clause for non-Earth worlds.
 
         Returns:
             A dict with 'agent' and 'output' keys; output is the three-block structured plan.
@@ -264,15 +280,23 @@ class PlanningAgent(BaseAgent):
             f"FEEDBACK FROM MULTIPLE REVIEWERS:\n{numbered}\n\n"
             "Produce a structured revision plan using the exact format specified."
         )
-        output = self._call_claude(REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        system_prompt = REVISION_PLAN_SYSTEM_PROMPT + (_REVISION_BUCKET_CLAUSE if non_earth else "")
+        output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision_prose(self, story: str, plan: str,
-                            prose_feedback: str, consistency_feedback: str) -> dict:
+                            prose_feedback: str, consistency_feedback: str, non_earth: bool = False) -> dict:
         """Turn prose-editor findings into a forced-all section revision plan.
 
         Every prose finding must become a SECTION revision; structural ops and
         general notes are pinned to NONE. Used only by the final prose pass.
+
+        Args:
+            story: The current draft (may contain <<<SECTION N>>> markers).
+            plan: The original narrative plan.
+            prose_feedback: Prose-level findings from the editor.
+            consistency_feedback: Consistency-level findings.
+            non_earth: If True, append bucket-handling clause for non-Earth worlds.
         """
         section_nums = sorted(int(m) for m in re.findall(r'<<<SECTION\s+(\d+)>>>', story))
         section_list = (
@@ -288,7 +312,8 @@ class PlanningAgent(BaseAgent):
             f"CONSISTENCY NOTES (fold in text-level fixes only):\n{consistency_feedback}\n\n"
             "Produce the structured revision plan using the exact format specified."
         )
-        output = self._call_claude(PROSE_REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if non_earth else "")
+        output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def revise_with_world_bible(self, plan: str, world_bible: str,

@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from agents.base_agent import INITIAL_DRAFT_MODEL
-from agents.planning_agent import PlanningAgent
+from agents.planning_agent import PlanningAgent, REVISION_PLAN_SYSTEM_PROMPT
 
 _THREE_BLOCK = (
     "=== STRUCTURAL OPERATIONS ===\nNONE\n"
@@ -76,3 +76,27 @@ def test_revise_with_world_bible_uses_opus_and_passes_inputs():
     assert "smells of iron" in user_prompt
     assert "halved gravity" in user_prompt
     assert "8,000 words" in user_prompt
+
+
+def test_plan_revision_earth_prompt_unchanged():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="out") as m:
+        agent.plan_revision(story="s", plan="p", feedbacks=["f"])
+    assert m.call_args.args[0] == REVISION_PLAN_SYSTEM_PROMPT   # exact, unchanged
+
+
+def test_plan_revision_non_earth_adds_bucket_clause():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="out") as m:
+        agent.plan_revision(story="s", plan="p", feedbacks=["f"], non_earth=True)
+    sp = m.call_args.args[0]
+    assert sp != REVISION_PLAN_SYSTEM_PROMPT
+    assert "[WORLD]" in sp and "[CRAFT]" in sp
+
+
+def test_plan_revision_prose_non_earth_drops_world_tag():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="out") as m:
+        agent.plan_revision_prose(story="s", plan="p", prose_feedback="pf",
+                                  consistency_feedback="cf", non_earth=True)
+    assert "[WORLD]" in m.call_args.args[0]
