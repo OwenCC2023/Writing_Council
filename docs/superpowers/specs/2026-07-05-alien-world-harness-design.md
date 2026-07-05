@@ -67,6 +67,16 @@ writer directly, exactly as today.
 Both artifacts are produced once and threaded as params (like `plan`/`story`) through
 `_run_inner`, `_run_middle`, `_run_prose_pass`. Empty strings when EARTH.
 
+**Derivation vs consumption (signature impact).** `non_earth`, `canon_sheet`, and
+`world_bible` are all *produced inside the initial `_run_inner` branch* (that is where the
+planner runs, is classified, and — when alien — WorldBuilder + the bible-revision run).
+But they are *consumed* by the sibling loop methods. So they must bubble **out**:
+- Initial `_run_inner` returns `(plan, story, non_earth, canon_sheet, world_bible)`.
+- `run()` holds them and passes them into `_run_middle` and `_run_prose_pass`.
+- The middle's *from-middle* `_run_inner` call receives them as params and must **not**
+  reclassify or rebuild the world — WorldBuilder and the bible-revision run **once**, in
+  the initial inner only.
+
 ## Components
 
 ### 1. WorldBuilderAgent (new)
@@ -90,8 +100,10 @@ Both artifacts are produced once and threaded as params (like `plan`/`story`) th
 - **Model: Opus 4.8** (heavy front-loaded cognition, runs once — cost acceptable).
 
 ### 1b. Planner bible-revision pass (new method)
-- `PlanningAgent.revise_with_world_bible(plan, world_bible, canon_sheet)` — runs only when
-  `non_earth`, after WorldBuilder, before the first write.
+- `PlanningAgent.revise_with_world_bible(plan, world_bible, canon_sheet, target_length)` —
+  runs only when `non_earth`, after WorldBuilder, before the first write. `target_length`
+  is required: the rewrite must preserve the word-count target and keep per-section budgets
+  summing to it, exactly as `run()` does — otherwise the rebudgeted plan blows the length.
 - Rewrites the plan so its events, conflicts, and revelations exploit the now-stocked
   world (may refine section breakdown; writer marks the draft to match). Returns a **full
   narrative plan** in the same shape as `run()`. Its prompt must pin two negatives, or the
@@ -105,6 +117,9 @@ Both artifacts are produced once and threaded as params (like `plan`/`story`) th
 - `trope_blacklist.md` at repo root. Injected into WorldBuilder + Writer system prompts
   via `.format()`, mirroring `ai_writing_failure_modes.md`.
 - Stub / near-empty initially; content filled later. No new `run()` parameter.
+- **Must ship as a committed stub file in the same change as the code that reads it.** The
+  readers use `path.read_text()` (like `DEFAULT_FAILURE_MODES_PATH`), which raises
+  `FileNotFoundError` if absent. Reads are gated on `non_earth`, so EARTH never touches it.
 
 ### 3. Writer model elevation
 - `WriterAgent.revise()` gains a `model` param (only `run()` has one today).
