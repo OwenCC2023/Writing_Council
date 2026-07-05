@@ -356,7 +356,7 @@ class WritingCouncil:
 
         # Inner with all four middle feedbacks; both Agent 1 calls use plan_revision
         print("[middle] Starting inner loop (both plan_revisions active)...")
-        _, story = self._run_inner(
+        _, story, *_ = self._run_inner(
             plan=plan,
             story=story,
             middle_feedbacks=middle_feedbacks,
