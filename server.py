@@ -58,7 +58,11 @@ def run():
             style=data.get("style", ""),
             image=image,
         )
-        return jsonify({"story": result["story"], "log": result["log"]})
+        return jsonify({
+            "story": result["story"],
+            "log": result["log"],
+            "non_earth": result.get("non_earth", False),
+        })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
     finally:
