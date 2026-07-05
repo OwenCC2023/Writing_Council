@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from agents.base_agent import INITIAL_DRAFT_MODEL
 from agents.planning_agent import PlanningAgent
 
 _THREE_BLOCK = (
@@ -60,3 +61,18 @@ def test_run_system_prompt_includes_world_class_instruction():
         agent.run(idea="i", target_length="1k", target_audience="a")
     system_prompt = m.call_args.args[0]
     assert "<<<WORLD_CLASS: NON-EARTH>>>" in system_prompt
+
+
+def test_revise_with_world_bible_uses_opus_and_passes_inputs():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="REVISED PLAN") as m:
+        result = agent.revise_with_world_bible(
+            plan="OLD PLAN", world_bible="smells of iron",
+            canon_sheet="halved gravity", target_length="8,000 words")
+    assert result["output"] == "REVISED PLAN"
+    assert m.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
+    user_prompt = m.call_args.args[1]
+    assert "OLD PLAN" in user_prompt
+    assert "smells of iron" in user_prompt
+    assert "halved gravity" in user_prompt
+    assert "8,000 words" in user_prompt

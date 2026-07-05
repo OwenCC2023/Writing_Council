@@ -1,6 +1,6 @@
 import re
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, INITIAL_DRAFT_MODEL
 
 SYSTEM_PROMPT = """\
 You are a meticulous story architect. Your job is to take a raw idea and expand it into \
@@ -188,6 +188,23 @@ HARD RULES FOR THIS PASS:
   is out of scope this pass.\
 """
 
+BIBLE_REVISION_SYSTEM_PROMPT = """\
+You are a story architect revising a narrative plan now that the story's world has been \
+fully precomputed. You are given the original plan, a CANON SHEET of the world's rules, and \
+a WORLD BIBLE of concrete sensory material. Rewrite the plan so its events, conflicts, and \
+revelations genuinely exploit this world — a chase uses this world's transport, a conflict \
+arises from its social tensions, a revelation is legible only within its rules. Draw \
+specific material from the bible into the section beats.
+
+Output a FULL narrative plan in the same format the original used (CHARACTERS section, then \
+numbered sections with what/when/where/why/how/cost and prose-weight + word budgets). \
+HARD RULES:
+- Preserve the target length; per-section word budgets must still sum to it.
+- Do NOT emit a <<<WORLD_CLASS>>> tag — classification is already done.
+- Do NOT use the "=== STRUCTURAL OPERATIONS ===" diff-ops format; this is a full plan, \
+  not a revision-ops list.\
+"""
+
 
 class PlanningAgent(BaseAgent):
     """Converts a raw story idea into a detailed section-by-section narrative plan."""
@@ -272,4 +289,28 @@ class PlanningAgent(BaseAgent):
             "Produce the structured revision plan using the exact format specified."
         )
         output = self._call_claude(PROSE_REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        return {"agent": "PlanningAgent", "output": output}
+
+    def revise_with_world_bible(self, plan: str, world_bible: str,
+                                canon_sheet: str, target_length: str) -> dict:
+        """Revise a narrative plan using a precomputed world bible and canon sheet.
+
+        Args:
+            plan: The original narrative plan.
+            world_bible: Concrete sensory material of the world.
+            canon_sheet: The world's rules in a structured form.
+            target_length: The target length for the story.
+
+        Returns:
+            A dict with 'agent' and 'output' keys; output is a full narrative plan.
+        """
+        user_prompt = (
+            f"ORIGINAL PLAN:\n{plan}\n\n"
+            f"CANON SHEET:\n{canon_sheet}\n\n"
+            f"WORLD BIBLE:\n{world_bible}\n\n"
+            f"TARGET LENGTH: {target_length}\n\n"
+            "Rewrite the full plan to exploit this world."
+        )
+        output = self._call_claude(BIBLE_REVISION_SYSTEM_PROMPT, user_prompt,
+                                   model=INITIAL_DRAFT_MODEL)
         return {"agent": "PlanningAgent", "output": output}
