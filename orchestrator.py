@@ -12,6 +12,9 @@ from agents import (
     EditorAgent,
     MarketingAgent,
     AudienceAgent,
+    WorldBuilderAgent,
+    StrangenessReviewerAgent,
+    SensoryQuotaAgent,
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL
 
@@ -57,6 +60,9 @@ class WritingCouncil:
         self.editor = EditorAgent()
         self.marketing = MarketingAgent()
         self.audience = AudienceAgent()
+        self.world_builder = WorldBuilderAgent()
+        self.strangeness = StrangenessReviewerAgent()
+        self.sensory = SensoryQuotaAgent()
         self._log = []
         self._log_file = None
 
@@ -99,7 +105,7 @@ class WritingCouncil:
 
         # Inner — generates plan and initial story
         print("[outer] Starting inner loop (initial write)...")
-        plan, story = self._run_inner(
+        plan, story, non_earth, canon_sheet, world_bible = self._run_inner(
             idea=idea,
             target_length=target_length,
             target_audience=target_audience,
@@ -148,8 +154,13 @@ class WritingCouncil:
         story: str = None,
         middle_feedbacks: list = None,
         label: str = "inner",
+        non_earth: bool = False,
+        canon_sheet: str = "",
+        world_bible: str = "",
     ) -> tuple:
-        """Returns (plan, story)."""
+        """Returns (plan, story, non_earth, canon_sheet, world_bible)."""
+
+        non_earth, canon_sheet, world_bible = False, "", ""
 
         if idea is not None:
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
@@ -176,10 +187,30 @@ class WritingCouncil:
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
+            non_earth, plan = self._parse_world_class(plan)
+
+            if non_earth:
+                print(f"[{label}] NON-EARTH world — running WorldBuilder...")
+                self._log_start(f"{label}.world_builder", "WorldBuilderAgent",
+                                f"idea:\n{idea}\n\nplan:\n{plan}")
+                wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules)
+                self._log_end(wb, step=f"{label}.world_builder")
+                canon_sheet, world_bible = wb["canon_sheet"], wb["world_bible"]
+
+                print(f"[{label}] Revising plan against the world bible...")
+                self._log_start(f"{label}.plan_bible_revision", "PlanningAgent",
+                                f"plan:\n{plan}\n\nworld_bible:\n{world_bible}")
+                rev = self.planner.revise_with_world_bible(
+                    plan=plan, world_bible=world_bible, canon_sheet=canon_sheet,
+                    target_length=target_length)
+                self._log_end(rev, step=f"{label}.plan_bible_revision")
+                plan = rev["output"]
 
             print(f"[{label}] Running WriterAgent (initial write)...")
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
-            write_result = self.writer.run(plan=plan, model=INITIAL_DRAFT_MODEL)
+            write_result = self.writer.run(
+                plan=plan, model=INITIAL_DRAFT_MODEL,
+                canon_sheet=canon_sheet, world_bible=world_bible)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
@@ -221,29 +252,52 @@ class WritingCouncil:
         check_label = (
             f"sections {revised_sections}" if revised_sections is not None else "full story"
         )
-        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent in parallel "
-              f"({check_label})...")
+        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent"
+              f"{' , StrangenessReviewerAgent and SensoryQuotaAgent' if non_earth else ''} "
+              f"in parallel ({check_label})...")
         self._log_start(f"{label}.consistency", "ConsistencyAgent", f"story:\n{check_text}")
         self._log_start(f"{label}.ai_check", "AIFailureCheckerAgent", f"story:\n{check_text}")
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f_cons = executor.submit(self.consistency.run, story=check_text)
-            f_ai = executor.submit(self.ai_checker.run, story=check_text)
+        if non_earth:
+            self._log_start(f"{label}.strangeness", "StrangenessReviewerAgent",
+                            f"story:\n{check_text}")
+            self._log_start(f"{label}.sensory", "SensoryQuotaAgent", f"story:\n{check_text}")
+        workers = 4 if non_earth else 2
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            f_cons = executor.submit(self.consistency.run, story=check_text,
+                                     canon_sheet=canon_sheet)
+            f_ai = executor.submit(self.ai_checker.run, story=check_text,
+                                   canon_sheet=canon_sheet)
+            f_str = executor.submit(self.strangeness.run, story=check_text,
+                                    canon_sheet=canon_sheet) if non_earth else None
+            f_sen = executor.submit(self.sensory.run, story=check_text,
+                                    canon_sheet=canon_sheet) if non_earth else None
             cons_result = f_cons.result()
             ai_result = f_ai.result()
+            str_result = f_str.result() if f_str else None
+            sen_result = f_sen.result() if f_sen else None
         self._log_end(cons_result, step=f"{label}.consistency")
         self._log_end(ai_result, step=f"{label}.ai_check")
+        if str_result:
+            self._log_end(str_result, step=f"{label}.strangeness")
+        if sen_result:
+            self._log_end(sen_result, step=f"{label}.sensory")
 
         # ---- Second 1: plan_revision on checker outputs ----
         print(f"[{label}] Running PlanningAgent (plan revision from checkers)...")
+        feedbacks = [cons_result["output"], ai_result["output"]]
+        if str_result:
+            feedbacks.append(str_result["output"])
+        if sen_result:
+            feedbacks.append(sen_result["output"])
         self._log_start(
             f"{label}.plan_revision_2", "PlanningAgent",
-            f"[Consistency feedback]\n{cons_result['output']}\n\n"
-            f"[AI failure feedback]\n{ai_result['output']}",
+            "\n\n".join(f"[Checker {i + 1} feedback]\n{f}" for i, f in enumerate(feedbacks)),
         )
         result = self.planner.plan_revision(
             story=story,
             plan=plan,
-            feedbacks=[cons_result["output"], ai_result["output"]],
+            feedbacks=feedbacks,
+            non_earth=non_earth,
         )
         self._log_end(result, step=f"{label}.plan_revision_2")
         revision_plan = result["output"]
@@ -254,11 +308,14 @@ class WritingCouncil:
             f"{label}.write_2", "WriterAgent",
             f"revision_plan:\n{revision_plan}\n\nplan:\n{plan}\n\nstory:\n{story}",
         )
-        result = self.writer.revise(plan=plan, story=story, feedback=revision_plan)
+        result = self.writer.revise(
+            plan=plan, story=story, feedback=revision_plan,
+            model=(INITIAL_DRAFT_MODEL if non_earth else None),
+            canon_sheet=canon_sheet, world_bible=world_bible)
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
-        return plan, story
+        return plan, story, non_earth, canon_sheet, world_bible
 
     # ------------------------------------------------------------------
     # Middle loop: 5/6/7/8 → [1.plan_revision] → Inner(both 1s plan_revision)
