@@ -47,12 +47,15 @@ def test_run_prose_pass_calls_agents_in_order():
     out = council._run_prose_pass(plan="plan", story="story", top_n=5, label="prose.1")
 
     assert out == "final"
-    council.ai_checker.run_prose.assert_called_once_with(story="story", top_n=5)
-    council.consistency.run.assert_called_once_with(story="story")
+    council.ai_checker.run_prose.assert_called_once_with(
+        story="story", top_n=5, canon_sheet="")
+    council.consistency.run.assert_called_once_with(story="story", canon_sheet="")
     council.planner.plan_revision_prose.assert_called_once_with(
-        story="story", plan="plan", prose_feedback="prose", consistency_feedback="cons")
+        story="story", plan="plan", prose_feedback="prose", consistency_feedback="cons",
+        non_earth=False)
     council.writer.revise.assert_called_once_with(
-        plan="plan", story="story", feedback="revplan")
+        plan="plan", story="story", feedback="revplan",
+        model=None, canon_sheet="", world_bible="")
 
 
 def test_run_applies_one_prose_pass_and_strips_markers():
@@ -74,7 +77,7 @@ def test_run_respects_prose_passes_and_top_n():
     council._run_inner = MagicMock(return_value=("plan", "s", False, "", ""))
     council._run_middle = MagicMock(return_value="s")
     council._run_prose_pass = MagicMock(
-        side_effect=lambda plan, story, top_n, label: story + "+")
+        side_effect=lambda plan, story, top_n, label, **kwargs: story + "+")
 
     result = council.run(idea="i", target_length="1k", target_audience="a",
                          prose_passes=3, prose_top_n=7)
@@ -151,6 +154,21 @@ def test_initial_inner_earth_skips_world_builder():
         plan=council.planner.plan_revision.call_args.kwargs["plan"],
         feedbacks=council.planner.plan_revision.call_args.kwargs["feedbacks"],
         non_earth=False)
+
+
+def test_run_threads_non_earth_into_middle_and_prose():
+    council = WritingCouncil()
+    council._run_inner = MagicMock(
+        return_value=("plan", "<<<SECTION 1>>>\nD.", True, "CANON", "BIBLE"))
+    council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nM.")
+    council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nP.")
+
+    council.run(idea="i", target_length="1k", target_audience="a")
+
+    assert council._run_middle.call_args.kwargs["non_earth"] is True
+    assert council._run_middle.call_args.kwargs["canon_sheet"] == "CANON"
+    assert council._run_prose_pass.call_args.kwargs["non_earth"] is True
+    assert council._run_prose_pass.call_args.kwargs["world_bible"] == "BIBLE"
 
 
 def test_parse_world_class_non_earth():

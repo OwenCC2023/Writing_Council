@@ -118,17 +118,20 @@ class WritingCouncil:
 
         # Middle
         print("[outer] Starting middle loop...")
-        story = self._run_middle(plan, story, target_audience)
+        story = self._run_middle(plan, story, target_audience,
+                                 non_earth=non_earth, canon_sheet=canon_sheet,
+                                 world_bible=world_bible)
 
         # Final prose-cleanup pass(es)
         for i in range(prose_passes):
             print(f"[outer] Starting prose-cleanup pass {i + 1}/{prose_passes}...")
             story = self._run_prose_pass(
-                plan, story, top_n=prose_top_n, label=f"prose.{i + 1}")
+                plan, story, top_n=prose_top_n, label=f"prose.{i + 1}",
+                non_earth=non_earth, canon_sheet=canon_sheet, world_bible=world_bible)
 
         # Section markers survive until here (the prose passes need them); strip last.
         story = self._strip_section_markers(story)
-        return {"story": story, "log": list(self._log)}
+        return {"story": story, "non_earth": non_earth, "log": list(self._log)}
 
     # ------------------------------------------------------------------
     # Inner loop: 1 → 2 → (4∥3) → 1(plan_revision) → 2
@@ -160,9 +163,8 @@ class WritingCouncil:
     ) -> tuple:
         """Returns (plan, story, non_earth, canon_sheet, world_bible)."""
 
-        non_earth, canon_sheet, world_bible = False, "", ""
-
         if idea is not None:
+            non_earth, canon_sheet, world_bible = False, "", ""
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
             image_desc = ", ".join(image) if isinstance(image, list) else image
@@ -237,7 +239,10 @@ class WritingCouncil:
                 f"{label}.write_1", "WriterAgent",
                 f"revision_plan:\n{pre_write_plan}\n\nplan:\n{plan}\n\nstory:\n{story}",
             )
-            write_result = self.writer.revise(plan=plan, story=story, feedback=pre_write_plan)
+            write_result = self.writer.revise(
+                plan=plan, story=story, feedback=pre_write_plan,
+                model=(INITIAL_DRAFT_MODEL if non_earth else None),
+                canon_sheet=canon_sheet, world_bible=world_bible)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
@@ -320,7 +325,9 @@ class WritingCouncil:
     # ------------------------------------------------------------------
     # Middle loop: 5/6/7/8 → [1.plan_revision] → Inner(both 1s plan_revision)
     # ------------------------------------------------------------------
-    def _run_middle(self, plan: str, story: str, target_audience: str) -> str:
+    def _run_middle(self, plan: str, story: str, target_audience: str,
+                    non_earth: bool = False, canon_sheet: str = "",
+                    world_bible: str = "") -> str:
         # 5, 6, 7, 8 — all four reviewers in parallel
         print("[middle] Running PeerWriterAgent, EditorAgent, MarketingAgent, "
               "AudienceAgent in parallel...")
@@ -332,12 +339,16 @@ class WritingCouncil:
         self._log_start("middle.audience", "AudienceAgent",
                         f"target_audience: {target_audience}\n\nstory:\n{story}")
         with ThreadPoolExecutor(max_workers=4) as executor:
-            f_peer = executor.submit(self.peer_writer.run, plan=plan, story=story)
-            f_editor = executor.submit(self.editor.run, story=story)
+            f_peer = executor.submit(self.peer_writer.run, plan=plan, story=story,
+                                     canon_sheet=canon_sheet)
+            f_editor = executor.submit(self.editor.run, story=story,
+                                       canon_sheet=canon_sheet)
             f_mkt = executor.submit(self.marketing.run, story=story,
-                                    target_audience=target_audience)
+                                    target_audience=target_audience,
+                                    canon_sheet=canon_sheet)
             f_aud = executor.submit(self.audience.run, story=story,
-                                    target_audience=target_audience)
+                                    target_audience=target_audience,
+                                    canon_sheet=canon_sheet)
             peer_result = f_peer.result()
             editor_result = f_editor.result()
             mkt_result = f_mkt.result()
@@ -356,11 +367,14 @@ class WritingCouncil:
 
         # Inner with all four middle feedbacks; both Agent 1 calls use plan_revision
         print("[middle] Starting inner loop (both plan_revisions active)...")
-        _, story, *_ = self._run_inner(
+        _, story, _, _, _ = self._run_inner(
             plan=plan,
             story=story,
             middle_feedbacks=middle_feedbacks,
             label="middle.inner",
+            non_earth=non_earth,
+            canon_sheet=canon_sheet,
+            world_bible=world_bible,
         )
         return story
 
@@ -368,7 +382,8 @@ class WritingCouncil:
     # Final prose-cleanup pass: (4 ∥ 3_prose) → 1(plan_revision_prose) → 2
     # ------------------------------------------------------------------
     def _run_prose_pass(self, plan: str, story: str, top_n: int = 5,
-                        label: str = "prose") -> str:
+                        label: str = "prose", non_earth: bool = False,
+                        canon_sheet: str = "", world_bible: str = "") -> str:
         """One line-level polish pass. Runs consistency + prose-mode checker in
         parallel, forces all prose findings into a section-revision plan, and
         applies it. Returns the revised story (markers intact)."""
@@ -377,8 +392,10 @@ class WritingCouncil:
         self._log_start(f"{label}.consistency", "ConsistencyAgent")
         self._log_start(f"{label}.prose_check", "AIFailureCheckerAgent")
         with ThreadPoolExecutor(max_workers=2) as executor:
-            f_cons = executor.submit(self.consistency.run, story=story)
-            f_prose = executor.submit(self.ai_checker.run_prose, story=story, top_n=top_n)
+            f_cons = executor.submit(self.consistency.run, story=story,
+                                     canon_sheet=canon_sheet)
+            f_prose = executor.submit(self.ai_checker.run_prose, story=story, top_n=top_n,
+                                      canon_sheet=canon_sheet)
             cons_result = f_cons.result()
             prose_result = f_prose.result()
         self._log_end(cons_result, step=f"{label}.consistency")
@@ -391,13 +408,17 @@ class WritingCouncil:
             plan=plan,
             prose_feedback=prose_result["output"],
             consistency_feedback=cons_result["output"],
+            non_earth=non_earth,
         )
         self._log_end(plan_result, step=f"{label}.plan_revision")
         revision_plan = plan_result["output"]
 
         print(f"[{label}] Running WriterAgent (prose revise)...")
         self._log_start(f"{label}.write", "WriterAgent")
-        write_result = self.writer.revise(plan=plan, story=story, feedback=revision_plan)
+        write_result = self.writer.revise(
+            plan=plan, story=story, feedback=revision_plan,
+            model=(INITIAL_DRAFT_MODEL if non_earth else None),
+            canon_sheet=canon_sheet, world_bible=world_bible)
         self._log_end(write_result, step=f"{label}.write")
         return write_result["output"]
 
