@@ -27,6 +27,11 @@ billed — never start a real council run just to verify code; the tests mock th
 - `agents/` — one class per agent, all subclassing `agents/base_agent.py:BaseAgent`
   (shared Anthropic client; `_call_claude` and `_call_claude_with_image`).
   System prompts live as module-level string constants in each agent file.
+- Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (Sonnet) for planner/writer,
+  `FEEDBACK_MODEL` (Haiku) for reviewers, `INITIAL_DRAFT_MODEL` (Opus 4.8) for the
+  first plan + first write only. `PlanningAgent.run`/`WriterAgent.run` take an optional
+  `model` override (falls back to `self.model`); the orchestrator passes
+  `INITIAL_DRAFT_MODEL` at those two initial call sites, so all revisions stay on Sonnet.
 - `ai_writing_failure_modes.md` — taxonomy the `AIFailureCheckerAgent` reviews against;
   injected into its system prompts.
 - Drafts carry `<<<SECTION N>>>` markers so revisions can target sections (diff-style);
