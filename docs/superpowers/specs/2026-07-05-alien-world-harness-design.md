@@ -36,15 +36,63 @@ output. When `NON-EARTH`, the same plan pass also breaks the story into **more, 
 The orchestrator parses and strips the tag → `non_earth: bool`, which gates every
 component below. **EARTH runs are byte-for-byte today's pipeline.**
 
+## Pipeline order (non_earth)
+
+```
+planner.run [Opus]                  classify EARTH|NON-EARTH + chunk smaller
+   │  parse + strip <<<WORLD_CLASS>>> → non_earth
+   ▼  (non_earth only:)
+WorldBuilder.run [Opus]             plan text → world_bible + canon_sheet (one call)
+   ▼
+planner.revise_with_world_bible     NEW method. Full plan rewrite informed by the
+   [Opus]                           bible, so plan events actually exploit the world.
+   │                                Returns a full narrative plan (same shape as run(),
+   │                                NOT the === diff-ops format). Fixes "plan predates
+   ▼                                the bible."
+writer.run [Opus]                   plan + world_bible + canon_sheet
+   ▼
+... Inner / Middle / prose as today, all writer calls Opus, canon everywhere
+```
+
+For EARTH the middle two stages are skipped entirely and `planner.run` output feeds the
+writer directly, exactly as today.
+
+## Artifact threading (bible vs canon)
+
+| Artifact | Size | Goes to |
+|----------|------|---------|
+| **canon sheet** | short rule list | writer (all calls) + all six reviewers + strangeness + sensory + planner bible-revision |
+| **world-bible** | dense detail bank | write passes only (`run` + `revise`) and the planner bible-revision. **Never** to reviewers — they judge against rules, not the detail bank. |
+
+Both artifacts are produced once and threaded as params (like `plan`/`story`) through
+`_run_inner`, `_run_middle`, `_run_prose_pass`. Empty strings when EARTH.
+
 ## Components
 
 ### 1. WorldBuilderAgent (new)
 - Runs once, immediately after the planner, only when `non_earth`.
-- Input: idea, plan, world_rules / image-deduction text, trope blacklist file.
-- Output (single call, two blocks): **world-bible** (dense concrete sensory detail bank —
-  textures, smells, sounds, body-sensations, daily objects) and **canon sheet** (short
-  authoritative rule list threaded downstream).
+- Input: idea, **the plan text** (which already contains the planner's WORLD DEDUCTION
+  from any images — WorldBuilder does **not** re-consume raw images, avoiding redundant
+  vision cost), world_rules, trope blacklist file.
+- Output (single call, two blocks) with hard delimiters for parsing:
+  ```
+  === WORLD BIBLE ===
+  <dense concrete sensory detail bank — textures, smells, sounds, body-sensations, objects>
+  === CANON SHEET ===
+  <short authoritative rule list>
+  ```
+  A splitter on those two headers yields `world_bible` and `canon_sheet`.
 - **Model: Opus 4.8** (heavy front-loaded cognition, runs once — cost acceptable).
+
+### 1b. Planner bible-revision pass (new method)
+- `PlanningAgent.revise_with_world_bible(plan, world_bible, canon_sheet)` — runs only when
+  `non_earth`, after WorldBuilder, before the first write.
+- Rewrites the plan so its events, conflicts, and revelations exploit the now-stocked
+  world (may refine section breakdown; writer marks the draft to match). Returns a **full
+  narrative plan** in the same shape as `run()` — NOT the `===` diff-ops format used by
+  `plan_revision`.
+- **Model: Opus 4.8.** (The planner's reviewer-feedback `plan_revision` calls stay on
+  their existing tier; only this new bible pass and the initial `run` are Opus.)
 
 ### 2. Trope blacklist
 - `trope_blacklist.md` at repo root. Injected into WorldBuilder + Writer system prompts
@@ -63,7 +111,9 @@ component below. **EARTH runs are byte-for-byte today's pipeline.**
   when `non_earth`). Active only when `non_earth`.
 - Job is the inverse of the normalizing reviewers: flag where prose is too Earth-tame, the
   world is underexploited, or defamiliarization is missing. Gets the canon sheet.
-- Output joins the `plan_revision_2` feedback list.
+- Output joins the `plan_revision_2` feedback list. Its findings carry the `[WORLD]` bucket
+  tag so the planner referees the push/pull against the normalizing reviewers consistently
+  (see Oscillation control below).
 - **Model: Sonnet** (inversion judgment is subtler than pattern-matching).
 
 ### 5. SensoryQuotaAgent (new)
@@ -71,7 +121,7 @@ component below. **EARTH runs are byte-for-byte today's pipeline.**
 - Bans abstraction hedge-nouns (otherworldly, strange, shimmering, indescribable, alien);
   reports concrete-sensory-detail density per section (like existing tic-density
   reporting) and flags low-density sections.
-- Output joins the `plan_revision_2` feedback list.
+- Output joins the `plan_revision_2` feedback list; findings carry the `[WORLD]` bucket tag.
 - **Model: Sonnet**.
 
 ### 6. Reviewer recalibration
@@ -82,8 +132,25 @@ component below. **EARTH runs are byte-for-byte today's pipeline.**
   - Lower authority on intentional strangeness near canon-elements; keep full authority on
     rhythm, grammar, clarity.
 - **PeerWriterAgent (agent 5) is exempt — full authority always** (it is the craft voice).
-- plan_revision / plan_revision_prose prompts updated: fix `[CRAFT]` findings; treat
-  `[WORLD]` findings as authorial intent unless they name an actual contradiction.
+- **EARTH byte-identical guard:** the canon sheet + bucketing instructions are injected
+  *conditionally*. With no canon sheet (EARTH), every reviewer's prompt string must be
+  byte-for-byte identical to today's, so existing characterization tests keep passing. New
+  text only appears when a canon sheet is present.
+
+### Oscillation control
+Strangeness/sensory push toward more strangeness; consistency/ai_checker push toward
+cutting and normalizing. All findings carry `[CRAFT]` / `[WORLD]` tags, and the planner is
+the single referee: `plan_revision` / `plan_revision_prose` prompts are updated to fix
+`[CRAFT]` findings and treat `[WORLD]` findings as authorial intent unless they name an
+actual contradiction — so a section is not pushed strange one pass and tamed the next.
+
+### Prose pass (`_run_prose_pass`)
+- Its reviewers are separate entry points (`consistency.run`, `ai_checker.run_prose`) and
+  must receive the canon sheet + bucketing too when `non_earth`.
+- `plan_revision_prose` currently **forces every finding into a fix**. Update it to still
+  drop `[WORLD]`-tagged strangeness even in force-all mode — otherwise the final polish
+  normalizes exactly what the harness protects. `[CRAFT]` findings remain force-fixed.
+- Strangeness + sensory do **not** run in the prose pass (Inner-loop only, per design).
 
 ### Inner fan-out when `non_earth`
 `consistency ∥ ai_checker ∥ strangeness ∥ sensory` → all four feed `plan_revision_2`.
@@ -101,10 +168,12 @@ component below. **EARTH runs are byte-for-byte today's pipeline.**
 | Component | Model | Rationale |
 |-----------|-------|-----------|
 | WorldBuilderAgent | Opus 4.8 | Heavy front-loaded cognition, once per run |
+| Planner bible-revision pass | Opus 4.8 | Rewrites plan against the bible (non_earth only) |
 | StrangenessReviewer | Sonnet | Subtle inversion judgment |
 | SensoryQuotaAgent | Sonnet | Density analysis + noun policing |
 | Writer (non_earth, all passes) | Opus 4.8 | Craft under alien load |
-| Planner | unchanged | Opus initial, Sonnet revisions |
+| Planner (initial run) | Opus 4.8 | Unchanged — classify + first plan |
+| Planner (reviewer-feedback plan_revision) | unchanged | Existing tier, no change |
 | Reviewer prompt edits | unchanged | No model change |
 
 ## Testing
@@ -112,7 +181,11 @@ component below. **EARTH runs are byte-for-byte today's pipeline.**
 Characterize with mocked LLM calls (existing convention — no real API calls):
 - Classification tag parsed and stripped; `non_earth` derived correctly for both classes.
 - WorldBuilder invoked only when `non_earth`; skipped for FAMILIAR.
-- Canon sheet threaded into writer + all six reviewers + two new agents.
+- WorldBuilder output split correctly into `world_bible` / `canon_sheet` on the `===` headers.
+- Planner bible-revision pass runs only when `non_earth`, on Opus, and its output (full
+  plan, not diff-ops) is what reaches the writer.
+- Canon sheet threaded into writer + all six reviewers + two new agents; world-bible into
+  write passes only, never reviewers.
 - Writer receives Opus model id on all passes when `non_earth`.
 - Strangeness + Sensory present in the fan-out only when `non_earth`; their outputs reach
   `plan_revision_2`.
