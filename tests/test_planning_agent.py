@@ -36,3 +36,19 @@ def test_plan_revision_prose_prompt_carries_force_and_pins():
     assert "GENERAL NOTES is always NONE" in system_prompt
     assert "findings" in user_prompt        # prose feedback threaded in
     assert "cons" in user_prompt            # consistency feedback threaded in
+
+
+def test_run_threads_model_override_to_call():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a",
+                  model="claude-opus-4-8")
+    assert m.call_args.kwargs["model"] == "claude-opus-4-8"
+
+
+def test_run_with_image_threads_model_override():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude_with_image", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a",
+                  image="photo.png", model="claude-opus-4-8")
+    assert m.call_args.kwargs["model"] == "claude-opus-4-8"

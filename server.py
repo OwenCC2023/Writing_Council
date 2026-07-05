@@ -17,23 +17,34 @@ def index():
     return app.send_static_file("index.html")
 
 
+def _write_temp_image(data_uri: str, filename: str) -> str:
+    raw = data_uri
+    if "," in raw:
+        raw = raw.split(",", 1)[1]
+    image_bytes = base64.b64decode(raw)
+    suffix = Path(filename or "upload.png").suffix or ".png"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    tmp.write(image_bytes)
+    tmp.close()
+    return tmp.name
+
+
 @app.route("/run", methods=["POST"])
 def run():
     data = request.get_json()
-    image_path = None
+    image_paths = []
     try:
         image = ""
-        if data.get("image_file"):
-            raw = data["image_file"]
-            if "," in raw:
-                raw = raw.split(",", 1)[1]
-            image_bytes = base64.b64decode(raw)
-            suffix = Path(data.get("image_filename", "upload.png")).suffix or ".png"
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            tmp.write(image_bytes)
-            tmp.close()
-            image_path = tmp.name
-            image = image_path
+        image_files = data.get("image_files")
+        if image_files:
+            image_paths = [
+                _write_temp_image(f["data"], f.get("filename", ""))
+                for f in image_files
+            ]
+            image = image_paths
+        elif data.get("image_file"):
+            image_paths = [_write_temp_image(data["image_file"], data.get("image_filename", ""))]
+            image = image_paths[0]
         elif data.get("image_url"):
             image = data["image_url"]
 
@@ -51,8 +62,9 @@ def run():
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
     finally:
-        if image_path and os.path.exists(image_path):
-            os.unlink(image_path)
+        for path in image_paths:
+            if os.path.exists(path):
+                os.unlink(path)
 
 
 @app.route("/save", methods=["POST"])

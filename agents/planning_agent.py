@@ -62,19 +62,26 @@ without further clarification.\
 
 IMAGE_PROMPT_ADDENDUM = """\
 
-An image has been provided as part of the initial prompt. Before producing the plan, \
-include a WORLD DEDUCTION section at the very top (before any PROSE STYLE section). \
-In this section:
-- Examine every visible detail of the image — architecture, technology, clothing, \
-  lighting, materials, social organisation, flora/fauna, scale, and any text or symbols.
+One or more images have been provided as part of the initial prompt. Treat them as \
+depictions of a single world. Before producing the plan, include a WORLD DEDUCTION \
+section at the very top (before any PROSE STYLE section). In this section:
+- Examine every visible detail of every image — architecture, technology, clothing, \
+  lighting, materials, social organisation, flora/fauna, scale, and any text or symbols. \
+  Do not skim later images because the first seemed sufficient; each image is evidence.
 - Deduce the underlying rules of this world from what is shown: era, technological level, \
   power structures, physical laws that appear to differ from our own, cultural norms, \
   and aesthetic conventions.
-- Extrapolate what is implied but not directly visible — if the image shows a skyline, \
+- Synthesize across images: a detail that recurs in several images is a load-bearing \
+  rule of the world; a detail unique to one image is local color for a specific place, \
+  class, or moment. Where images appear to contradict each other, resolve the \
+  contradiction in-world (different regions, eras, or social strata) and state the \
+  resolution as one of the rules.
+- Extrapolate what is implied but not directly visible — if an image shows a skyline, \
   infer transportation; if it shows a crowd, infer hierarchy.
 - State each deduced rule as a concrete, usable fact (e.g. "Gravity appears lower than \
   Earth-normal — structures are impossibly tall and spindly", not "the world looks unusual").
-These deductions become the authoritative world rules for the plan that follows, \
+The result must be one consistent set of world rules covering everything shown. These \
+deductions become the authoritative world rules for the plan that follows, \
 supplementing — and where they conflict, overriding — any world rules provided in text.\
 """
 
@@ -179,7 +186,8 @@ class PlanningAgent(BaseAgent):
         world_rules: str = "",
         framework: str = "",
         style: str = "",
-        image: str = "",
+        image: str | list = "",
+        model: str = None,
     ) -> dict:
         user_prompt = f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
         if world_rules:
@@ -193,9 +201,9 @@ class PlanningAgent(BaseAgent):
         system_prompt = SYSTEM_PROMPT + (IMAGE_PROMPT_ADDENDUM if image else "")
 
         if image:
-            output = self._call_claude_with_image(system_prompt, user_prompt, image)
+            output = self._call_claude_with_image(system_prompt, user_prompt, image, model=model)
         else:
-            output = self._call_claude(system_prompt, user_prompt)
+            output = self._call_claude(system_prompt, user_prompt, model=model)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:

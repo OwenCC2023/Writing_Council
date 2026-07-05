@@ -1,6 +1,28 @@
 from unittest.mock import MagicMock
 
 from orchestrator import WritingCouncil
+from agents.base_agent import INITIAL_DRAFT_MODEL
+
+
+def test_initial_inner_runs_plan_and_write_on_opus():
+    """Initial plan + write use INITIAL_DRAFT_MODEL; revisions do not."""
+    council = WritingCouncil()
+    council.planner.run = MagicMock(return_value={"agent": "PlanningAgent", "output": "plan"})
+    council.writer.run = MagicMock(
+        return_value={"agent": "WriterAgent", "output": "story", "revised_sections": None})
+    council.consistency.run = MagicMock(return_value={"agent": "ConsistencyAgent", "output": "c"})
+    council.ai_checker.run = MagicMock(return_value={"agent": "AIFailureCheckerAgent", "output": "a"})
+    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
+    council.writer.revise = MagicMock(
+        return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
+
+    council._run_inner(idea="i", target_length="1k", target_audience="a")
+
+    assert council.planner.run.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
+    assert council.writer.run.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
+    # Revisions carry no model override -> stay on the agent's default.
+    assert "model" not in council.writer.revise.call_args.kwargs
+    assert INITIAL_DRAFT_MODEL == "claude-opus-4-8"
 
 
 def test_strip_section_markers_removes_markers_keeps_prose():
