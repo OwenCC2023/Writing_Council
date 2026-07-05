@@ -8,6 +8,7 @@ from .marketing_agent import MarketingAgent
 from .audience_agent import AudienceAgent
 from .world_builder_agent import WorldBuilderAgent
 from .strangeness_agent import StrangenessReviewerAgent
+from .sensory_agent import SensoryQuotaAgent
 
 __all__ = [
     "PlanningAgent",
@@ -20,4 +21,5 @@ __all__ = [
     "AudienceAgent",
     "WorldBuilderAgent",
     "StrangenessReviewerAgent",
+    "SensoryQuotaAgent",
 ]
