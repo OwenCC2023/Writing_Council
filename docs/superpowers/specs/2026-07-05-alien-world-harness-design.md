@@ -74,14 +74,19 @@ Both artifacts are produced once and threaded as params (like `plan`/`story`) th
 - Input: idea, **the plan text** (which already contains the planner's WORLD DEDUCTION
   from any images — WorldBuilder does **not** re-consume raw images, avoiding redundant
   vision cost), world_rules, trope blacklist file.
-- Output (single call, two blocks) with hard delimiters for parsing:
+- Output (single call, two blocks) with hard delimiters for parsing. **Canon sheet is
+  emitted FIRST, world-bible SECOND** — canon is short and load-bearing (threaded
+  everywhere), so if the response ever hits the token cap, only the bible's tail is at
+  risk, never the canon:
   ```
-  === WORLD BIBLE ===
-  <dense concrete sensory detail bank — textures, smells, sounds, body-sensations, objects>
   === CANON SHEET ===
   <short authoritative rule list>
+  === WORLD BIBLE ===
+  <dense concrete sensory detail bank — textures, smells, sounds, body-sensations, objects>
   ```
-  A splitter on those two headers yields `world_bible` and `canon_sheet`.
+  A splitter on those two headers yields `canon_sheet` and `world_bible`.
+- **Raise `max_tokens`** for this call above the 8192 default (the bible is intentionally
+  dense) so neither block truncates.
 - **Model: Opus 4.8** (heavy front-loaded cognition, runs once — cost acceptable).
 
 ### 1b. Planner bible-revision pass (new method)
@@ -89,8 +94,10 @@ Both artifacts are produced once and threaded as params (like `plan`/`story`) th
   `non_earth`, after WorldBuilder, before the first write.
 - Rewrites the plan so its events, conflicts, and revelations exploit the now-stocked
   world (may refine section breakdown; writer marks the draft to match). Returns a **full
-  narrative plan** in the same shape as `run()` — NOT the `===` diff-ops format used by
-  `plan_revision`.
+  narrative plan** in the same shape as `run()`. Its prompt must pin two negatives, or the
+  writer gets a malformed plan: **do NOT re-emit `<<<WORLD_CLASS>>>`** (classification is
+  already done and parsed) and **do NOT use the `===` diff-ops format** used by
+  `plan_revision` (this is a narrative plan, not an ops list).
 - **Model: Opus 4.8.** (The planner's reviewer-feedback `plan_revision` calls stay on
   their existing tier; only this new bible pass and the initial `run` are Opus.)
 
@@ -132,10 +139,13 @@ Both artifacts are produced once and threaded as params (like `plan`/`story`) th
   - Lower authority on intentional strangeness near canon-elements; keep full authority on
     rhythm, grammar, clarity.
 - **PeerWriterAgent (agent 5) is exempt — full authority always** (it is the craft voice).
-- **EARTH byte-identical guard:** the canon sheet + bucketing instructions are injected
-  *conditionally*. With no canon sheet (EARTH), every reviewer's prompt string must be
-  byte-for-byte identical to today's, so existing characterization tests keep passing. New
-  text only appears when a canon sheet is present.
+- **EARTH byte-identical guard (broad scope):** all new prompt text — reviewer canon +
+  bucketing, **planner `plan_revision`/`plan_revision_prose` bucket-handling, and the
+  writer's trope-blacklist injection** — is injected *conditionally* and appears only when
+  `non_earth`. On an EARTH run every one of these prompt strings (six reviewers, planner
+  revision methods, writer) must be byte-for-byte identical to today's, so existing
+  characterization tests keep passing. The guard is not just the reviewers — it covers the
+  planner revision prompts and the writer too.
 
 ### Oscillation control
 Strangeness/sensory push toward more strangeness; consistency/ai_checker push toward
@@ -154,6 +164,8 @@ actual contradiction — so a section is not pushed strange one pass and tamed t
 
 ### Inner fan-out when `non_earth`
 `consistency ∥ ai_checker ∥ strangeness ∥ sensory` → all four feed `plan_revision_2`.
+`_run_inner`'s `ThreadPoolExecutor(max_workers=2)` is hardcoded for the two-checker case;
+bump it to 4 when `non_earth` so the two new agents run concurrently rather than queuing.
 
 ## Surface area
 
@@ -175,6 +187,16 @@ actual contradiction — so a section is not pushed strange one pass and tamed t
 | Planner (initial run) | Opus 4.8 | Unchanged — classify + first plan |
 | Planner (reviewer-feedback plan_revision) | unchanged | Existing tier, no change |
 | Reviewer prompt edits | unchanged | No model change |
+
+## Cost (deliberate tradeoff)
+
+A `non_earth` run is materially more expensive than an EARTH run of the same length. It
+stacks **three Opus calls before the first word is written** (`planner.run` →
+`WorldBuilder` → `planner.revise_with_world_bible`), runs **every** writer pass on Opus
+(not just the initial two), and adds two Sonnet reviewers per Inner cycle plus canon-sheet
+tokens on many calls. Rough order: 3–5× the token cost of the equivalent EARTH run. This
+is accepted on purpose — alien-world quality is the whole point of the feature — but it is
+a stated tradeoff, not an accident. EARTH runs are unaffected.
 
 ## Testing
 
