@@ -6,6 +6,7 @@ from .peer_writer_agent import PeerWriterAgent
 from .editor_agent import EditorAgent
 from .marketing_agent import MarketingAgent
 from .audience_agent import AudienceAgent
+from .world_builder_agent import WorldBuilderAgent
 
 __all__ = [
     "PlanningAgent",
@@ -16,4 +17,5 @@ __all__ = [
     "EditorAgent",
     "MarketingAgent",
     "AudienceAgent",
+    "WorldBuilderAgent",
 ]
