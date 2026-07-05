@@ -1,4 +1,5 @@
 from .base_agent import BaseAgent, FEEDBACK_MODEL
+from .world_calibration import with_canon
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are an authentic member of the following audience: {target_audience}
@@ -33,11 +34,11 @@ class AudienceAgent(BaseAgent):
     def __init__(self, model: str = FEEDBACK_MODEL):
         super().__init__(model=model)
 
-    def run(self, story: str, target_audience: str) -> dict:
+    def run(self, story: str, target_audience: str, canon_sheet: str = "") -> dict:
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(target_audience=target_audience)
         user_prompt = (
             f"STORY:\n{story}\n\n"
             "Share your honest reaction to this story as a reader."
         )
-        output = self._call_claude(system_prompt, user_prompt)
+        output = self._call_claude(with_canon(system_prompt, canon_sheet), user_prompt)
         return {"agent": "AudienceAgent", "output": output}

@@ -31,7 +31,8 @@ billed — never start a real council run just to verify code; the tests mock th
   `FEEDBACK_MODEL` (Haiku) for reviewers, `INITIAL_DRAFT_MODEL` (Opus 4.8) for the
   first plan + first write only. `PlanningAgent.run`/`WriterAgent.run` take an optional
   `model` override (falls back to `self.model`); the orchestrator passes
-  `INITIAL_DRAFT_MODEL` at those two initial call sites, so all revisions stay on Sonnet.
+  `INITIAL_DRAFT_MODEL` at those two initial call sites, so on an EARTH run all revisions
+  stay on Sonnet. (On a `non_earth` run the writer is Opus on every pass — see Alien-world path.)
 - `ai_writing_failure_modes.md` — taxonomy the `AIFailureCheckerAgent` reviews against;
   injected into its system prompts.
 - Drafts carry `<<<SECTION N>>>` markers so revisions can target sections (diff-style);
@@ -40,6 +41,36 @@ billed — never start a real council run just to verify code; the tests mock th
 - `server.py` + `static/index.html` — Flask UI. Single self-contained HTML file:
   inline CSS (dark/light via CSS custom properties on `body.light`) and inline JS.
 - `logs/` — every run writes a full per-step log (`run_<timestamp>.log`).
+
+## Alien-world path (`non_earth`)
+
+For out-of-distribution worlds (off-Earth, or Earth far from present-day experience —
+far future, deep past), the pipeline front-loads the world so write-time is pure craft.
+Gated entirely on a `non_earth` flag; **an EARTH run is byte-for-byte the base pipeline.**
+
+- `PlanningAgent.run` always emits `<<<WORLD_CLASS: EARTH|NON-EARTH>>>` as the first line
+  (classification by distributional distance) and, when NON-EARTH, chunks into more/smaller
+  sections. `WritingCouncil._parse_world_class` reads and strips the tag → `non_earth`.
+- `WorldBuilderAgent` (Opus, runs once when `non_earth`) turns the plan text into a
+  `=== CANON SHEET ===` (short authoritative rules) + `=== WORLD BIBLE ===` (dense sensory
+  detail bank) — canon emitted first so truncation only ever costs the bible tail. Reads the
+  plan (which already holds any image WORLD DEDUCTION), not raw images. Injects
+  `trope_blacklist.md` like `ai_writing_failure_modes.md`.
+- `PlanningAgent.revise_with_world_bible` (Opus) rewrites the plan to exploit the world
+  before the first write. Returns a full plan (not the `===` diff-ops format).
+- `WriterAgent` runs on Opus for **all** passes when `non_earth`, with canon + bible +
+  blacklist in context (`_world_block`). Reviewers get the **canon only**, never the bible.
+- Two new Inner-loop reviewers (Sonnet), added to the checker fan-out only when `non_earth`
+  (`max_workers` 2→4): `StrangenessReviewerAgent` (flags prose too Earth-tame) and
+  `SensoryQuotaAgent` (bans abstraction hedge-nouns, reports per-section sensory density).
+- The six existing reviewers are canon-aware via `agents/world_calibration.py:with_canon`,
+  which tags findings `[CRAFT]` vs `[WORLD]` and lowers authority near canon-elements —
+  **PeerWriter is exempt** (`lower_authority=False`). `plan_revision`/`plan_revision_prose`
+  fix `[CRAFT]`, treat `[WORLD]` as intent (and the prose pass drops `[WORLD]` even under
+  force-all). `with_canon(prompt, "")` returns the prompt unchanged — that identity is what
+  keeps EARTH byte-for-byte, so existing prompt-string tests are the regression guard.
+- Cost: a `non_earth` run is ~3–5× an EARTH run (three Opus calls before the first write +
+  Opus on every write) — a deliberate tradeoff. `run()` returns `non_earth`; `/run` surfaces it.
 
 ## Images
 

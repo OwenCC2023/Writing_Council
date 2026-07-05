@@ -1,4 +1,5 @@
 from .base_agent import BaseAgent, FEEDBACK_MODEL
+from .world_calibration import with_canon
 
 SYSTEM_PROMPT = """\
 You are a demanding literary editor. Your standard is high and your patience for weak work \
@@ -38,11 +39,11 @@ class EditorAgent(BaseAgent):
     def __init__(self, model: str = FEEDBACK_MODEL):
         super().__init__(model=model)
 
-    def run(self, story: str) -> dict:
+    def run(self, story: str, canon_sheet: str = "") -> dict:
         user_prompt = (
             f"STORY:\n{story}\n\n"
             "Provide a full editorial review: genuine strengths, significant weaknesses, "
             "and concrete improvement advice."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
+        output = self._call_claude(with_canon(SYSTEM_PROMPT, canon_sheet), user_prompt)
         return {"agent": "EditorAgent", "output": output}

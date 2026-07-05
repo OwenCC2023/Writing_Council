@@ -1,10 +1,28 @@
 import re
+from pathlib import Path
 
 from .base_agent import BaseAgent
 
 # Output token limit for the initial full write only.
 # Subsequent revise() calls output only changed sections, so 8192 is sufficient there.
 INITIAL_WRITE_MAX_TOKENS = 16000  # ~10k words at ~625 tokens/1k words, with headroom
+
+DEFAULT_BLACKLIST_PATH = Path(__file__).parent.parent / "trope_blacklist.md"
+
+
+def _world_block(canon_sheet: str, world_bible: str) -> str:
+    """Return the appended write-time world block, or '' when no canon sheet."""
+    if not canon_sheet:
+        return ""
+    blacklist = DEFAULT_BLACKLIST_PATH.read_text(encoding="utf-8")
+    return (
+        "\n\n---\n"
+        f"WORLD CANON (obey these rules exactly; they are already resolved, so commit "
+        f"boldly and do not hedge):\n{canon_sheet}\n\n"
+        f"WORLD BIBLE (draw concrete sensory detail from here instead of inventing or "
+        f"reaching for abstractions like 'strange' or 'otherworldly'):\n{world_bible}\n\n"
+        f"AVOID THESE TROPES:\n---\n{blacklist}\n---"
+    )
 
 SYSTEM_PROMPT = """\
 You are a skilled prose writer. You will be given a detailed narrative plan and your job \
@@ -124,24 +142,29 @@ class WriterAgent(BaseAgent):
     # Public interface
     # ------------------------------------------------------------------
 
-    def run(self, plan: str, model: str = None) -> dict:
+    def run(self, plan: str, model: str = None,
+            canon_sheet: str = "", world_bible: str = "") -> dict:
+        system_prompt = SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             "Write the full story based on this plan."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt,
+        output = self._call_claude(system_prompt, user_prompt,
                                    model=model,
                                    max_tokens=INITIAL_WRITE_MAX_TOKENS)
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
-    def revise(self, plan: str, story: str, feedback: str) -> dict:
+    def revise(self, plan: str, story: str, feedback: str, model: str = None,
+               canon_sheet: str = "", world_bible: str = "") -> dict:
+        world = _world_block(canon_sheet, world_bible)
         sections = self._parse_sections(story)
 
         # No section markers present — fall back to full rewrite.
         if not sections:
             output = self._call_claude(
-                REVISION_FALLBACK_SYSTEM_PROMPT,
+                REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, story, feedback),
+                model=model,
             )
             return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
@@ -159,7 +182,7 @@ class WriterAgent(BaseAgent):
                 prompt = self._build_section_revision_prompt(
                     plan, {k: sections[k] for k in valid}, valid
                 )
-                raw = self._call_claude(REVISION_SYSTEM_PROMPT, prompt)
+                raw = self._call_claude(REVISION_SYSTEM_PROMPT + world, prompt, model=model)
                 revised = self._parse_sections(raw)
                 sections = self._apply_section_revisions(sections, revised)
                 # Only set revised_section_nums if there were no structural ops that
@@ -171,8 +194,9 @@ class WriterAgent(BaseAgent):
         if general_notes:
             rebuilt = self._rebuild_story(sections)
             output = self._call_claude(
-                REVISION_FALLBACK_SYSTEM_PROMPT,
+                REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, rebuilt, general_notes),
+                model=model,
             )
             parsed = self._parse_sections(output)
             sections = parsed if parsed else sections  # keep old sections if markers dropped

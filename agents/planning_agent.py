@@ -1,6 +1,6 @@
 import re
 
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, INITIAL_DRAFT_MODEL
 
 SYSTEM_PROMPT = """\
 You are a meticulous story architect. Your job is to take a raw idea and expand it into \
@@ -58,6 +58,20 @@ before the section breakdown. Translate the style keyword into specific, concret
 guidance covering: sentence length and rhythm, descriptive density, dialogue approach, \
 tonal register, and what to avoid. A skilled writer should be able to follow this guidance \
 without further clarification.\
+"""
+
+CLASSIFY_ADDENDUM = """\
+
+Before anything else, classify this world by DISTRIBUTIONAL DISTANCE from present-day \
+human experience — not by geography. Emit exactly one tag as the VERY FIRST LINE of your \
+output, before any WORLD DEDUCTION or PROSE STYLE section:
+<<<WORLD_CLASS: EARTH>>>      if the world is contemporary or familiar-historical Earth.
+<<<WORLD_CLASS: NON-EARTH>>>  if it is off-Earth OR an Earth far enough from present-day \
+common experience (far future, deep past such as the Cretaceous, radically altered) that \
+its sensory texture falls outside ordinary experience.
+If and only if NON-EARTH, break the story into MORE, SMALLER numbered sections than you \
+otherwise would, so the writer holds less world-state per section. Per-section word budgets \
+must still sum to the target length.\
 """
 
 IMAGE_PROMPT_ADDENDUM = """\
@@ -174,6 +188,38 @@ HARD RULES FOR THIS PASS:
   is out of scope this pass.\
 """
 
+_REVISION_BUCKET_CLAUSE = """\
+
+BUCKETED FEEDBACK: reviewers may tag findings [CRAFT] or [WORLD]. Fix [CRAFT] findings. \
+Treat [WORLD] findings as authorial intent for a deliberately non-Earth world — act on one \
+only if it names an actual contradiction, never merely because a passage "reads strange".\
+"""
+
+_PROSE_BUCKET_CLAUSE = """\
+
+BUCKETED FEEDBACK: findings may be tagged [CRAFT] or [WORLD]. Force-fix every [CRAFT] \
+finding as instructed above. DROP any [WORLD]-tagged "reads strange" finding even though \
+this pass otherwise forces all findings — the world's strangeness is intentional. Still \
+fold in [WORLD] findings that are genuine text-level contradictions.\
+"""
+
+BIBLE_REVISION_SYSTEM_PROMPT = """\
+You are a story architect revising a narrative plan now that the story's world has been \
+fully precomputed. You are given the original plan, a CANON SHEET of the world's rules, and \
+a WORLD BIBLE of concrete sensory material. Rewrite the plan so its events, conflicts, and \
+revelations genuinely exploit this world — a chase uses this world's transport, a conflict \
+arises from its social tensions, a revelation is legible only within its rules. Draw \
+specific material from the bible into the section beats.
+
+Output a FULL narrative plan in the same format the original used (CHARACTERS section, then \
+numbered sections with what/when/where/why/how/cost and prose-weight + word budgets). \
+HARD RULES:
+- Preserve the target length; per-section word budgets must still sum to it.
+- Do NOT emit a <<<WORLD_CLASS>>> tag — classification is already done.
+- Do NOT use the "=== STRUCTURAL OPERATIONS ===" diff-ops format; this is a full plan, \
+  not a revision-ops list.\
+"""
+
 
 class PlanningAgent(BaseAgent):
     """Converts a raw story idea into a detailed section-by-section narrative plan."""
@@ -198,7 +244,7 @@ class PlanningAgent(BaseAgent):
             user_prompt += f"\n\nPROSE STYLE: {style}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
-        system_prompt = SYSTEM_PROMPT + (IMAGE_PROMPT_ADDENDUM if image else "")
+        system_prompt = SYSTEM_PROMPT + CLASSIFY_ADDENDUM + (IMAGE_PROMPT_ADDENDUM if image else "")
 
         if image:
             output = self._call_claude_with_image(system_prompt, user_prompt, image, model=model)
@@ -206,13 +252,14 @@ class PlanningAgent(BaseAgent):
             output = self._call_claude(system_prompt, user_prompt, model=model)
         return {"agent": "PlanningAgent", "output": output}
 
-    def plan_revision(self, story: str, plan: str, feedbacks: list) -> dict:
+    def plan_revision(self, story: str, plan: str, feedbacks: list, non_earth: bool = False) -> dict:
         """Synthesize feedback from multiple reviewers into a structured revision plan.
 
         Args:
             story: The current draft (may contain <<<SECTION N>>> markers).
             plan: The original narrative plan the story was built from.
             feedbacks: List of feedback strings from different reviewer agents.
+            non_earth: If True, append bucket-handling clause for non-Earth worlds.
 
         Returns:
             A dict with 'agent' and 'output' keys; output is the three-block structured plan.
@@ -233,15 +280,23 @@ class PlanningAgent(BaseAgent):
             f"FEEDBACK FROM MULTIPLE REVIEWERS:\n{numbered}\n\n"
             "Produce a structured revision plan using the exact format specified."
         )
-        output = self._call_claude(REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        system_prompt = REVISION_PLAN_SYSTEM_PROMPT + (_REVISION_BUCKET_CLAUSE if non_earth else "")
+        output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision_prose(self, story: str, plan: str,
-                            prose_feedback: str, consistency_feedback: str) -> dict:
+                            prose_feedback: str, consistency_feedback: str, non_earth: bool = False) -> dict:
         """Turn prose-editor findings into a forced-all section revision plan.
 
         Every prose finding must become a SECTION revision; structural ops and
         general notes are pinned to NONE. Used only by the final prose pass.
+
+        Args:
+            story: The current draft (may contain <<<SECTION N>>> markers).
+            plan: The original narrative plan.
+            prose_feedback: Prose-level findings from the editor.
+            consistency_feedback: Consistency-level findings.
+            non_earth: If True, append bucket-handling clause for non-Earth worlds.
         """
         section_nums = sorted(int(m) for m in re.findall(r'<<<SECTION\s+(\d+)>>>', story))
         section_list = (
@@ -257,5 +312,30 @@ class PlanningAgent(BaseAgent):
             f"CONSISTENCY NOTES (fold in text-level fixes only):\n{consistency_feedback}\n\n"
             "Produce the structured revision plan using the exact format specified."
         )
-        output = self._call_claude(PROSE_REVISION_PLAN_SYSTEM_PROMPT, user_prompt)
+        system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if non_earth else "")
+        output = self._call_claude(system_prompt, user_prompt)
+        return {"agent": "PlanningAgent", "output": output}
+
+    def revise_with_world_bible(self, plan: str, world_bible: str,
+                                canon_sheet: str, target_length: str) -> dict:
+        """Revise a narrative plan using a precomputed world bible and canon sheet.
+
+        Args:
+            plan: The original narrative plan.
+            world_bible: Concrete sensory material of the world.
+            canon_sheet: The world's rules in a structured form.
+            target_length: The target length for the story.
+
+        Returns:
+            A dict with 'agent' and 'output' keys; output is a full narrative plan.
+        """
+        user_prompt = (
+            f"ORIGINAL PLAN:\n{plan}\n\n"
+            f"CANON SHEET:\n{canon_sheet}\n\n"
+            f"WORLD BIBLE:\n{world_bible}\n\n"
+            f"TARGET LENGTH: {target_length}\n\n"
+            "Rewrite the full plan to exploit this world."
+        )
+        output = self._call_claude(BIBLE_REVISION_SYSTEM_PROMPT, user_prompt,
+                                   model=INITIAL_DRAFT_MODEL)
         return {"agent": "PlanningAgent", "output": output}

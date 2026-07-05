@@ -1,4 +1,5 @@
 from .base_agent import BaseAgent, FEEDBACK_MODEL
+from .world_calibration import with_canon
 
 SYSTEM_PROMPT = """\
 You are a commercial publishing strategist. You understand how books find their readers, \
@@ -36,11 +37,11 @@ class MarketingAgent(BaseAgent):
     def __init__(self, model: str = FEEDBACK_MODEL):
         super().__init__(model=model)
 
-    def run(self, story: str, target_audience: str) -> dict:
+    def run(self, story: str, target_audience: str, canon_sheet: str = "") -> dict:
         user_prompt = (
             f"TARGET AUDIENCE: {target_audience}\n\n"
             f"STORY:\n{story}\n\n"
             "Assess this story's appeal and marketability to its target audience."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
+        output = self._call_claude(with_canon(SYSTEM_PROMPT, canon_sheet), user_prompt)
         return {"agent": "MarketingAgent", "output": output}

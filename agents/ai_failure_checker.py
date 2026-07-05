@@ -1,5 +1,6 @@
 from pathlib import Path
 from .base_agent import BaseAgent, FEEDBACK_MODEL
+from .world_calibration import with_canon
 
 DEFAULT_FAILURE_MODES_PATH = Path(__file__).parent.parent / "ai_writing_failure_modes.md"
 
@@ -91,18 +92,19 @@ class AIFailureCheckerAgent(BaseAgent):
     def __init__(self, model: str = FEEDBACK_MODEL):
         super().__init__(model=model)
 
-    def run(self, story: str, failure_modes_path: str | Path = None) -> dict:
+    def run(self, story: str, failure_modes_path: str | Path = None,
+            canon_sheet: str = "") -> dict:
         path = Path(failure_modes_path) if failure_modes_path else DEFAULT_FAILURE_MODES_PATH
         failure_modes = path.read_text(encoding="utf-8")
 
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(failure_modes=failure_modes)
         user_prompt = f"STORY:\n{story}\n\nIdentify all AI writing failure modes present in this story."
 
-        output = self._call_claude(system_prompt, user_prompt)
+        output = self._call_claude(with_canon(system_prompt, canon_sheet), user_prompt)
         return {"agent": "AIFailureCheckerAgent", "output": output}
 
     def run_prose(self, story: str, top_n: int = 5,
-                  failure_modes_path: str | Path = None) -> dict:
+                  failure_modes_path: str | Path = None, canon_sheet: str = "") -> dict:
         path = Path(failure_modes_path) if failure_modes_path else DEFAULT_FAILURE_MODES_PATH
         failure_modes = path.read_text(encoding="utf-8")
 
@@ -113,5 +115,5 @@ class AIFailureCheckerAgent(BaseAgent):
             f"STORY:\n{story}\n\n"
             f"Identify the {top_n} most egregious surviving prose violations."
         )
-        output = self._call_claude(system_prompt, user_prompt)
+        output = self._call_claude(with_canon(system_prompt, canon_sheet), user_prompt)
         return {"agent": "AIFailureCheckerAgent", "output": output}

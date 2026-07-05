@@ -133,6 +133,28 @@ def test_run_with_multiple_image_files(client):
     assert all(not os.path.exists(p) for p in captured["image"])
 
 
+def test_run_response_includes_non_earth(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {
+            "story": "Once upon a time.",
+            "log": [],
+            "non_earth": True,
+        }
+        resp = client.post(
+            "/run",
+            data=json.dumps({
+                "idea": "A test story",
+                "target_length": "1,000 words",
+                "target_audience": "Testers",
+            }),
+            content_type="application/json",
+        )
+    assert resp.status_code == 200
+    data = json.loads(resp.data)
+    assert "non_earth" in data
+    assert data["non_earth"] is True
+
+
 def test_save_returns_docx_bytes(client):
     resp = client.post(
         "/save",
