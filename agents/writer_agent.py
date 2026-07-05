@@ -165,6 +165,7 @@ class WriterAgent(BaseAgent):
                 REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, story, feedback),
                 model=model,
+                max_tokens=INITIAL_WRITE_MAX_TOKENS,
             )
             return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
@@ -197,6 +198,7 @@ class WriterAgent(BaseAgent):
                 REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, rebuilt, general_notes),
                 model=model,
+                max_tokens=INITIAL_WRITE_MAX_TOKENS,
             )
             parsed = self._parse_sections(output)
             sections = parsed if parsed else sections  # keep old sections if markers dropped
