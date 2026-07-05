@@ -60,6 +60,20 @@ tonal register, and what to avoid. A skilled writer should be able to follow thi
 without further clarification.\
 """
 
+CLASSIFY_ADDENDUM = """\
+
+Before anything else, classify this world by DISTRIBUTIONAL DISTANCE from present-day \
+human experience — not by geography. Emit exactly one tag as the VERY FIRST LINE of your \
+output, before any WORLD DEDUCTION or PROSE STYLE section:
+<<<WORLD_CLASS: EARTH>>>      if the world is contemporary or familiar-historical Earth.
+<<<WORLD_CLASS: NON-EARTH>>>  if it is off-Earth OR an Earth far enough from present-day \
+common experience (far future, deep past such as the Cretaceous, radically altered) that \
+its sensory texture falls outside ordinary experience.
+If and only if NON-EARTH, break the story into MORE, SMALLER numbered sections than you \
+otherwise would, so the writer holds less world-state per section. Per-section word budgets \
+must still sum to the target length.\
+"""
+
 IMAGE_PROMPT_ADDENDUM = """\
 
 One or more images have been provided as part of the initial prompt. Treat them as \
@@ -198,7 +212,7 @@ class PlanningAgent(BaseAgent):
             user_prompt += f"\n\nPROSE STYLE: {style}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
-        system_prompt = SYSTEM_PROMPT + (IMAGE_PROMPT_ADDENDUM if image else "")
+        system_prompt = SYSTEM_PROMPT + CLASSIFY_ADDENDUM + (IMAGE_PROMPT_ADDENDUM if image else "")
 
         if image:
             output = self._call_claude_with_image(system_prompt, user_prompt, image, model=model)

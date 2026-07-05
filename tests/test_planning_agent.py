@@ -52,3 +52,11 @@ def test_run_with_image_threads_model_override():
         agent.run(idea="i", target_length="1k", target_audience="a",
                   image="photo.png", model="claude-opus-4-8")
     assert m.call_args.kwargs["model"] == "claude-opus-4-8"
+
+
+def test_run_system_prompt_includes_world_class_instruction():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="out") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a")
+    system_prompt = m.call_args.args[0]
+    assert "<<<WORLD_CLASS: NON-EARTH>>>" in system_prompt

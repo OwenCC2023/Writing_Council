@@ -345,6 +345,15 @@ class WritingCouncil:
         return write_result["output"]
 
     @staticmethod
+    def _parse_world_class(plan: str) -> tuple:
+        """Return (non_earth, plan_without_tag). Missing tag → (False, plan)."""
+        m = re.search(r'<<<WORLD_CLASS:\s*(EARTH|NON-EARTH)>>>\n?', plan, re.IGNORECASE)
+        if not m:
+            return False, plan
+        non_earth = m.group(1).upper() == "NON-EARTH"
+        return non_earth, plan[:m.start()] + plan[m.end():]
+
+    @staticmethod
     def _strip_section_markers(story: str) -> str:
         """Remove <<<SECTION N>>> markers. Called once at the end of run(),
         after all prose passes — the passes need the markers intact."""

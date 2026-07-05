@@ -81,3 +81,19 @@ def test_run_respects_prose_passes_and_top_n():
     assert council._run_prose_pass.call_count == 3
     assert council._run_prose_pass.call_args.kwargs["top_n"] == 7
     assert "<<<SECTION" not in result["story"]
+
+
+def test_parse_world_class_non_earth():
+    council = WritingCouncil()
+    plan = "<<<WORLD_CLASS: NON-EARTH>>>\n<<<SECTION 1>>>\nBody."
+    non_earth, stripped = council._parse_world_class(plan)
+    assert non_earth is True
+    assert "WORLD_CLASS" not in stripped
+    assert stripped.startswith("<<<SECTION 1>>>")
+
+
+def test_parse_world_class_earth_and_missing():
+    council = WritingCouncil()
+    assert council._parse_world_class("<<<WORLD_CLASS: EARTH>>>\nx")[0] is False
+    non_earth, stripped = council._parse_world_class("no tag here")
+    assert non_earth is False and stripped == "no tag here"
