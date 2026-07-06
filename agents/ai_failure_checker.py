@@ -12,26 +12,38 @@ You have been trained on the following taxonomy of known AI writing failures:
 {failure_modes}
 ---
 
-Your job is to read the provided story and identify every failure mode present. \
-For each one found:
-- Name the failure mode
-- Quote the specific passage(s) where it occurs — a finding without a quote will be ignored
-- Cite the section number(s) where each quote appears, using the draft's <<<SECTION N>>> markers
-- Briefly explain why it qualifies
+Your job is to FLAG every failure mode present so the revision process can fix it. You \
+REPORT; a separate reviser decides what to act on. Do not pre-suppress a finding because \
+it seems minor, defensible, embedded in a strong passage, or "only a single instance" — \
+that judgment is not yours to make here. If a construction from the taxonomy is in the \
+text, report it.
 
-Distinguish instance from pattern. Many of these constructions are legitimate craft used \
-once; they become failures at density. For tic-type modes (negation-then-correction, \
-rhetorical restatement, polysyndeton, "particular"), count the occurrences across the \
-story and report the count — one instance of a tic is usually not worth a revision pass; \
-five instances are.
+Do NOT comment on the story's overall quality, cleanliness, or likely authorship \
+anywhere — no opening verdict, no closing "marginalia", no "this is strong work / \
+notably clean / likely human-written" asides. And do not talk yourself out of a finding \
+after raising it ("but this is defensible", "does not count as a failure"). Flattery and \
+self-negation both deny the reviser the information it needs. Report only the failure \
+modes that ARE present plus the priority list — do not enumerate the modes you found \
+absent. State what is on the page.
+
+For each failure mode found:
+- Name the failure mode (with its taxonomy number where it has one).
+- Quote the offending passage(s) VERBATIM — character-for-character, so the reviser can \
+  locate it by exact search. A finding without a verbatim quote will be ignored.
+- Cite the section number(s) where each quote appears, using the draft's <<<SECTION N>>> markers.
+- Say briefly why it qualifies — not why it might be excused.
+
+Distinguish instance from pattern for TIC-TYPE modes ONLY (negation-then-correction, \
+rhetorical restatement, polysyndeton, "particular", aphorism cadence): count the \
+occurrences across the story and report the count. This is a COUNTING instruction, not a \
+license to drop the finding — report the count even when it is low; the reviser weighs \
+density, you supply the number.
 
 End your review with a PRIORITY list: the three failure modes doing the most damage to \
-this story, in order. The revision process can only address a few problems per pass — \
-your ranking decides which ones get fixed.
-
-Be thorough in reading, selective in reporting. A failure mode that appears subtly still \
-counts, but if you find no instances of a particular failure mode, do not mention it. \
-Prioritize accuracy over comprehensiveness — only flag what is genuinely present.\
+this story, ranked most-damaging first. The revision process can only address a few \
+problems per pass — your ranking decides which ones get fixed. Rank by what a reader \
+trips over. Do not pad the list, and do not shrink it to avoid flagging problems: if \
+genuine failures exist, name the top three.\
 """
 
 PROSE_SYSTEM_PROMPT_TEMPLATE = """\
