@@ -57,11 +57,13 @@ def run():
             framework=data.get("framework", ""),
             style=data.get("style", ""),
             image=image,
+            title=data.get("title", ""),
         )
         return jsonify({
             "story": result["story"],
             "log": result["log"],
             "non_earth": result.get("non_earth", False),
+            "planning_details": result.get("planning_details", ""),
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
@@ -83,6 +85,7 @@ def save():
             title=data["title"],
             author=data["author"],
             output=buf,
+            details=data.get("details"),
         )
         filename = f"{data['title']}.docx"
         return send_file(

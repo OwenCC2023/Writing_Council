@@ -234,8 +234,12 @@ class PlanningAgent(BaseAgent):
         style: str = "",
         image: str | list = "",
         model: str = None,
+        title: str = "",
     ) -> dict:
-        user_prompt = f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
+        user_prompt = ""
+        if title:
+            user_prompt += f"TITLE: {title}\n\n"
+        user_prompt += f"IDEA:\n{idea}\n\nTARGET LENGTH: {target_length}\nTARGET AUDIENCE: {target_audience}"
         if world_rules:
             user_prompt += f"\n\nWORLD RULES (deviations from our world):\n{world_rules}"
         if framework:

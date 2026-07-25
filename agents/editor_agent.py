@@ -27,9 +27,9 @@ Your review should cover:
 Anchor every strength and weakness to the draft's <<<SECTION N>>> numbers — your review \
 feeds a section-based revision process, and feedback that names no section cannot be acted on.
 
-Your goal is not to discourage the writer. Your goal is to give them the exact information \
+Your goal is to give the writer the exact information \
 they need to produce a significantly better next draft. Growth potential matters more than \
-present comfort.\
+present comfort. Be forthright when necessary.\
 """
 
 

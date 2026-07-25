@@ -61,7 +61,7 @@ def test_run_prose_pass_calls_agents_in_order():
 def test_run_applies_one_prose_pass_and_strips_markers():
     council = WritingCouncil()
     council._run_inner = MagicMock(
-        return_value=("plan", "<<<SECTION 1>>>\nDraft.", False, "", ""))
+        return_value=("plan", "<<<SECTION 1>>>\nDraft.", False, "", "", ""))
     council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nMiddle.")
     council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nProse out.")
 
@@ -74,7 +74,7 @@ def test_run_applies_one_prose_pass_and_strips_markers():
 
 def test_run_respects_prose_passes_and_top_n():
     council = WritingCouncil()
-    council._run_inner = MagicMock(return_value=("plan", "s", False, "", ""))
+    council._run_inner = MagicMock(return_value=("plan", "s", False, "", "", ""))
     council._run_middle = MagicMock(return_value="s")
     council._run_prose_pass = MagicMock(
         side_effect=lambda plan, story, top_n, label, **kwargs: story + "+")
@@ -109,7 +109,7 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
         "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nFinal.",
         "revised_sections": None})
 
-    plan, story, non_earth, canon, bible = council._run_inner(
+    plan, story, non_earth, canon, bible, _ = council._run_inner(
         idea="i", target_length="1k", target_audience="a")
 
     assert non_earth is True
@@ -140,7 +140,7 @@ def test_initial_inner_earth_skips_world_builder():
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
 
-    _, _, non_earth, canon, bible = council._run_inner(
+    _, _, non_earth, canon, bible, _ = council._run_inner(
         idea="i", target_length="1k", target_audience="a")
 
     assert non_earth is False
@@ -159,7 +159,7 @@ def test_initial_inner_earth_skips_world_builder():
 def test_run_threads_non_earth_into_middle_and_prose():
     council = WritingCouncil()
     council._run_inner = MagicMock(
-        return_value=("plan", "<<<SECTION 1>>>\nD.", True, "CANON", "BIBLE"))
+        return_value=("plan", "<<<SECTION 1>>>\nD.", True, "CANON", "BIBLE", ""))
     council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nM.")
     council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nP.")
 

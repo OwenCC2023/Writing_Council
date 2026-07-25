@@ -77,6 +77,7 @@ class WritingCouncil:
         image: str | list = "",
         prose_passes: int = 1,
         prose_top_n: int = 5,
+        title: str = "",
     ) -> dict:
         """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
@@ -84,6 +85,8 @@ class WritingCouncil:
             idea: The story concept or premise.
             target_length: Desired word count (e.g. "8,000 words").
             target_audience: Intended readership.
+            title: The story's title, forwarded to the initial PlanningAgent and
+                recorded in the returned planning_details.
             world_rules: Optional text describing deviations from the real world.
             framework: Optional structural template (e.g. "Short Story").
             style: Optional prose style keyword.
@@ -105,7 +108,7 @@ class WritingCouncil:
 
         # Inner — generates plan and initial story
         print("[outer] Starting inner loop (initial write)...")
-        plan, story, non_earth, canon_sheet, world_bible = self._run_inner(
+        plan, story, non_earth, canon_sheet, world_bible, planning_details = self._run_inner(
             idea=idea,
             target_length=target_length,
             target_audience=target_audience,
@@ -113,6 +116,7 @@ class WritingCouncil:
             framework=framework,
             style=style,
             image=image,
+            title=title,
             label="outer.inner",
         )
 
@@ -131,7 +135,8 @@ class WritingCouncil:
 
         # Section markers survive until here (the prose passes need them); strip last.
         story = self._strip_section_markers(story)
-        return {"story": story, "non_earth": non_earth, "log": list(self._log)}
+        return {"story": story, "non_earth": non_earth,
+                "planning_details": planning_details, "log": list(self._log)}
 
     # ------------------------------------------------------------------
     # Inner loop: 1 → 2 → (4∥3) → 1(plan_revision) → 2
@@ -153,6 +158,7 @@ class WritingCouncil:
         framework: str = "",
         style: str = "",
         image: str | list = "",
+        title: str = "",
         plan: str = None,
         story: str = None,
         middle_feedbacks: list = None,
@@ -161,14 +167,16 @@ class WritingCouncil:
         canon_sheet: str = "",
         world_bible: str = "",
     ) -> tuple:
-        """Returns (plan, story, non_earth, canon_sheet, world_bible)."""
+        """Returns (plan, story, non_earth, canon_sheet, world_bible, planning_details)."""
 
+        planning_details = ""
         if idea is not None:
             non_earth, canon_sheet, world_bible = False, "", ""
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
             image_desc = ", ".join(image) if isinstance(image, list) else image
             input_text = (
+                f"title: {title or '(none)'}\n"
                 f"idea: {idea}\ntarget_length: {target_length}\n"
                 f"target_audience: {target_audience}\n"
                 f"world_rules: {world_rules or '(none)'}\n"
@@ -176,6 +184,7 @@ class WritingCouncil:
                 f"style: {style or '(none)'}\n"
                 f"image: {image_desc or '(none)'}"
             )
+            planning_details = input_text
             self._log_start(f"{label}.plan", "PlanningAgent", input_text)
             result = self.planner.run(
                 idea=idea,
@@ -186,6 +195,7 @@ class WritingCouncil:
                 style=style,
                 image=image,
                 model=INITIAL_DRAFT_MODEL,
+                title=title,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
@@ -320,7 +330,7 @@ class WritingCouncil:
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
-        return plan, story, non_earth, canon_sheet, world_bible
+        return plan, story, non_earth, canon_sheet, world_bible, planning_details
 
     # ------------------------------------------------------------------
     # Middle loop: 5/6/7/8 → [1.plan_revision] → Inner(both 1s plan_revision)
@@ -367,7 +377,7 @@ class WritingCouncil:
 
         # Inner with all four middle feedbacks; both Agent 1 calls use plan_revision
         print("[middle] Starting inner loop (both plan_revisions active)...")
-        _, story, _, _, _ = self._run_inner(
+        _, story, _, _, _, _ = self._run_inner(
             plan=plan,
             story=story,
             middle_feedbacks=middle_feedbacks,

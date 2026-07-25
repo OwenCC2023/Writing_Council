@@ -301,6 +301,7 @@
 
   function buildPayload(imageFilesPayload) {
     const payload = {
+      title:            document.getElementById('title').value.trim(),
       idea:             document.getElementById('idea').value.trim(),
       target_length:    document.getElementById('target_length').value.trim(),
       target_audience:  document.getElementById('target_audience').value.trim(),
@@ -320,6 +321,8 @@
     return payload;
   }
 
+  let lastPlanningDetails = '';
+
   function submitPayload(payload) {
     errorMsg.classList.add('hidden');
     runBtn.disabled = true;
@@ -336,6 +339,7 @@
         spinner.classList.add('hidden');
         if (data.error) { showError(data.error); return; }
         storyOutput.value = data.story;
+        lastPlanningDetails = data.planning_details || '';
         outputSection.classList.remove('hidden');
         runBtn.disabled = false;
       })
@@ -377,7 +381,7 @@
     fetch('/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ story: storyOutput.value, title, author }),
+      body: JSON.stringify({ story: storyOutput.value, title, author, details: lastPlanningDetails }),
     })
       .then(r => {
         if (!r.ok) throw new Error('Save failed (' + r.status + ')');
