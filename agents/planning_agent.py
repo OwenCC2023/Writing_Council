@@ -14,6 +14,12 @@ For every section of the story, specify:
 - How it happens (scene mechanics, key beats, transitions)
 - What it costs (what the viewpoint character risks, loses, or is forced to give up — \
   a turning point without a price is a scene the writer will render flat)
+- How it escalates: name the one term of the story this beat changes from the previous \
+  beat — a raised stake, a narrowed option, a shifted alliance, a deepened or newly-thwarted \
+  want. A story is not a sequence of events; it is a sequence of escalations, each beat \
+  causing and altering the next. A beat that changes none of these terms is not yet earning \
+  its place: either give it a real turn or fold it into its neighbour. (The opening beat is \
+  exempt — it establishes the baseline the rest escalate from.)
 - Intended prose weight: brief (a paragraph or two), standard (a full scene), or extended \
   (a major set piece), plus an approximate word budget. The per-section budgets must sum \
   to the target length. The writer should calibrate length to dramatic significance, not \
@@ -52,6 +58,34 @@ and turning points. Do not describe atmosphere, setting, or mood in detail; a pl
 that over-specifies how a location feels invites the writer to expand on it at the expense \
 of forward momentum. Write the plan so the writer's job is to render action, not to \
 justify scene-setting.
+
+At the very top of the plan, before the section breakdown, include a STORY ENGINE block. \
+Every story runs on a power source. The defaults are plot and character, but any element \
+of fiction can be the engine: a MOOD engine (one dominant atmosphere every sentence feeds \
+toward), a VOICE engine (a narrator whose manner of speaking is itself the reason to read), \
+a SITUATION engine (a premise so charged the plot is almost beside the point — the "what \
+if" that renders the outcome secondary), a STRUCTURE engine (a form — nested, recursive, \
+reverse-chronological, braided — that generates the pressure plot would otherwise supply), \
+a LANGUAGE engine, a CONSTRAINT engine (a hard formal rule that becomes a plot substitute), \
+or a DOCUMENT-FORM engine (the story told as obituary, transcript, list, case file, \
+footnotes). In this block: (1) name the engine the premise would reach for by default; \
+(2) name the engine you are actually choosing to drive this story, preferring a non-default \
+one wherever the material can carry it; (3) in one or two sentences, say how that engine \
+will be felt on the page. Then build every section to run on it. Originality does not live \
+in the premise — every premise is taken — it lives in an unexpected power source executed \
+with total discipline. But an unexpected engine without the causality-and-escalation spine \
+above is just noise: strangeness is never a substitute for one beat causing the next.
+
+If a hard CONSTRAINT is provided, include a CONSTRAINT section at the very top of the plan \
+(alongside STORY ENGINE). Translate the constraint into concrete, checkable rules the writer \
+must obey on every pass: for a word-exact constraint, state the exact count and make the \
+per-section budgets sum to it; for a forbidden-word or forbidden-letter constraint, state the \
+banned tokens explicitly; for a document-form constraint (obituary, transcript, list, case \
+file), state the form and how each section inhabits it; for a second-person or other \
+voice constraint, state the rule. A hard constraint is frequently the story's power source — \
+when it is, name it as the engine in the STORY ENGINE block. Make the rule sharp and \
+unambiguous: a real constraint occupies the writer's self-conscious, convention-reaching \
+attention and lets the story get made underneath it.
 
 If a prose style is specified, include a PROSE STYLE section at the very top of the plan \
 before the section breakdown. Translate the style keyword into specific, concrete writing \
@@ -235,6 +269,7 @@ class PlanningAgent(BaseAgent):
         image: str | list = "",
         model: str = None,
         title: str = "",
+        constraint: str = "",
     ) -> dict:
         user_prompt = ""
         if title:
@@ -246,6 +281,8 @@ class PlanningAgent(BaseAgent):
             user_prompt += f"\n\nBASIC FRAMEWORK:\n{framework}"
         if style:
             user_prompt += f"\n\nPROSE STYLE: {style}"
+        if constraint:
+            user_prompt += f"\n\nHARD CONSTRAINT: {constraint}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
         system_prompt = SYSTEM_PROMPT + CLASSIFY_ADDENDUM + (IMAGE_PROMPT_ADDENDUM if image else "")

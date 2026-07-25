@@ -23,13 +23,20 @@ billed — never start a real council run just to verify code; the tests mock th
 
 - `orchestrator.py` — `WritingCouncil.run()` drives three nested loops:
   Outer (Inner → Middle → prose-cleanup passes), Middle (4 reviewers in parallel →
-  Inner), Inner (plan → write → parallel checkers → plan_revision → revise).
+  Inner), Inner (plan → write → parallel checkers → plan_revision → revise). The Inner
+  checker fan-out runs Consistency + AIFailure + `EngineReviewerAgent` on every run
+  (`max_workers` 3), plus Strangeness + Sensory on `non_earth` (`max_workers` 5).
 - `agents/` — one class per agent, all subclassing `agents/base_agent.py:BaseAgent`
   (shared Anthropic client; `_call_claude` and `_call_claude_with_image`).
   System prompts live as module-level string constants in each agent file.
-- Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (Sonnet) for planner/writer,
-  `FEEDBACK_MODEL` (Haiku) for reviewers, `INITIAL_DRAFT_MODEL` (Opus 4.8) for the
-  first plan + first write only. `PlanningAgent.run`/`WriterAgent.run` take an optional
+- Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (`claude-sonnet-5`) for
+  planner/writer, `FEEDBACK_MODEL` (`claude-haiku-4-5`) for reviewers,
+  `INITIAL_DRAFT_MODEL` (`claude-opus-5`) for the first plan + first write only.
+  These are the Sonnet 5 / Opus 5 family, which runs adaptive thinking on by default when
+  `thinking` is omitted; `_call_claude`/`_call_claude_with_image` pass
+  `thinking={"type": "disabled"}` to keep behavior controlled and extract the first text
+  block defensively (`_first_text`) rather than indexing `content[0]`.
+  `PlanningAgent.run`/`WriterAgent.run` take an optional
   `model` override (falls back to `self.model`); the orchestrator passes
   `INITIAL_DRAFT_MODEL` at those two initial call sites, so on an EARTH run all revisions
   stay on Sonnet. (On a `non_earth` run the writer is Opus on every pass — see Alien-world path.)
@@ -60,9 +67,12 @@ Gated entirely on a `non_earth` flag; **an EARTH run is byte-for-byte the base p
   before the first write. Returns a full plan (not the `===` diff-ops format).
 - `WriterAgent` runs on Opus for **all** passes when `non_earth`, with canon + bible +
   blacklist in context (`_world_block`). Reviewers get the **canon only**, never the bible.
-- Two new Inner-loop reviewers (Sonnet), added to the checker fan-out only when `non_earth`
-  (`max_workers` 2→4): `StrangenessReviewerAgent` (flags prose too Earth-tame) and
-  `SensoryQuotaAgent` (bans abstraction hedge-nouns, reports per-section sensory density).
+- Two Inner-loop reviewers (Sonnet), added to the checker fan-out only when `non_earth`
+  (they raise `max_workers` from the base 3 to 5): `StrangenessReviewerAgent` (flags prose
+  too Earth-tame) and `SensoryQuotaAgent` (bans abstraction hedge-nouns, reports per-section
+  sensory density). `EngineReviewerAgent` (see Story engine section) also gains a
+  weird-with-spine clause on `non_earth`: strangeness that sits on no causal beat is flagged
+  `[CRAFT]` (noise), so `plan_revision` fixes it and it survives the prose-pass force-all.
 - The six existing reviewers are canon-aware via `agents/world_calibration.py:with_canon`,
   which tags findings `[CRAFT]` vs `[WORLD]` and lowers authority near canon-elements —
   **PeerWriter is exempt** (`lower_authority=False`). `plan_revision`/`plan_revision_prose`
@@ -71,6 +81,28 @@ Gated entirely on a `non_earth` flag; **an EARTH run is byte-for-byte the base p
   keeps EARTH byte-for-byte, so existing prompt-string tests are the regression guard.
 - Cost: a `non_earth` run is ~3–5× an EARTH run (three Opus calls before the first write +
   Opus on every write) — a deliberate tradeoff. `run()` returns `non_earth`; `/run` surfaces it.
+
+## Story engine, escalation, and constraints
+
+Craft insights from `theory-of-the-good-unique-short-story.md`, applied on **every** run
+(EARTH included — these deliberately changed the base prompts):
+
+- `PlanningAgent` emits a `STORY ENGINE` block at the top of the plan: name the *obvious*
+  engine the premise reaches for, then the *chosen* one (mood / voice / situation / structure
+  / language / constraint / document-form / plot-character), biased toward a non-default power
+  source. Each section also carries a "How it escalates" field — the one term (stake, option,
+  alliance, want) that beat changes from the previous. `WriterAgent` treats the declared
+  engine as binding.
+- `EngineReviewerAgent` (`agents/engine_agent.py`, `FEEDBACK_MODEL`) is the Inner-loop reviewer
+  for both: engine adherence and causality/escalation (does beat N cause N+1; does exposition
+  ascend to rising action). Canon-aware via `with_canon` on `non_earth`.
+- `constraint` is an optional hard formal rule threaded like `style` end-to-end (`run` param →
+  `PlanningAgent.run` → `WriterAgent.run`/`revise` via a `_constraint_block`, plus server, CLI,
+  and browser UI). The planner translates it into checkable rules; the writer obeys it on every
+  pass. Countable constraints (exact word count, forbidden words) are verified deterministically
+  in `constraints.py:check_constraint` and returned as `constraint_check` (surfaced by `/run`,
+  the CLI, and the UI). Non-countable constraints (document-form, second-person) lean on the
+  engine reviewer.
 
 ## Images
 

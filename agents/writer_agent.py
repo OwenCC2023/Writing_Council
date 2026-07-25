@@ -24,6 +24,20 @@ def _world_block(canon_sheet: str, world_bible: str) -> str:
         f"AVOID THESE TROPES:\n---\n{blacklist}\n---"
     )
 
+
+def _constraint_block(constraint: str) -> str:
+    """Return the appended hard-constraint block, or '' when no constraint."""
+    if not constraint:
+        return ""
+    return (
+        "\n\n---\n"
+        f"HARD CONSTRAINT (absolute; obey it on every pass): {constraint}\n"
+        "This rule overrides convenience. If a revision instruction would violate it, keep "
+        "the constraint and satisfy the instruction some other way. Never announce, explain, "
+        "or apologize for the constraint in the prose — the reader should feel its effect, "
+        "not be told the rule."
+    )
+
 SYSTEM_PROMPT = """\
 You are a skilled prose writer. You will be given a detailed narrative plan and your job \
 is to write the actual story based on it.
@@ -34,6 +48,14 @@ Honor the plan's prose-weight labels and word budgets: a section marked brief st
 even if it is fun to write, and a section marked extended gets the room it was given. If \
 the plan includes a CHARACTERS section, each character's dialogue must be distinguishable \
 without tags — use the voice guidance it provides.
+
+The plan opens with a STORY ENGINE declaration — the power source this story runs on (mood, \
+voice, situation, structure, language, constraint, document-form, or plot/character). Treat \
+it as binding, not decorative. Every scene must feed that engine: a mood engine means every \
+sentence builds the one atmosphere; a voice engine means the narration's manner is the point \
+and must never flatten into neutral report; a structure or document-form engine means you \
+honor the form exactly. Where a choice would serve generic competence or serve the declared \
+engine, serve the engine.
 
 Write with specificity, varied sentence rhythm, and full scenes. Do not summarize what \
 the plan already describes — render it as lived experience. Trust the reader.
@@ -143,8 +165,9 @@ class WriterAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def run(self, plan: str, model: str = None,
-            canon_sheet: str = "", world_bible: str = "") -> dict:
-        system_prompt = SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
+            canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+        system_prompt = (SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
+                         + _constraint_block(constraint))
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             "Write the full story based on this plan."
@@ -155,8 +178,8 @@ class WriterAgent(BaseAgent):
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
     def revise(self, plan: str, story: str, feedback: str, model: str = None,
-               canon_sheet: str = "", world_bible: str = "") -> dict:
-        world = _world_block(canon_sheet, world_bible)
+               canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+        world = _world_block(canon_sheet, world_bible) + _constraint_block(constraint)
         sections = self._parse_sections(story)
 
         # No section markers present — fall back to full rewrite.

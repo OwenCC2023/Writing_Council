@@ -12,6 +12,7 @@ def test_initial_inner_runs_plan_and_write_on_opus():
         return_value={"agent": "WriterAgent", "output": "story", "revised_sections": None})
     council.consistency.run = MagicMock(return_value={"agent": "ConsistencyAgent", "output": "c"})
     council.ai_checker.run = MagicMock(return_value={"agent": "AIFailureCheckerAgent", "output": "a"})
+    council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
     council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
@@ -55,7 +56,7 @@ def test_run_prose_pass_calls_agents_in_order():
         non_earth=False)
     council.writer.revise.assert_called_once_with(
         plan="plan", story="story", feedback="revplan",
-        model=None, canon_sheet="", world_bible="")
+        model=None, canon_sheet="", world_bible="", constraint="")
 
 
 def test_run_applies_one_prose_pass_and_strips_markers():
@@ -102,6 +103,7 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
         "revised_sections": None})
     council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
     council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
+    council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
     council.strangeness.run = MagicMock(return_value={"output": "st", "agent": "S"})
     council.sensory.run = MagicMock(return_value={"output": "se", "agent": "Se"})
     council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
@@ -119,11 +121,14 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
     # Opus + canon/bible reached the initial write.
     assert council.writer.run.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
     assert council.writer.run.call_args.kwargs["canon_sheet"] == "CANON"
-    # Two new reviewers ran; their feedback reached plan_revision.
+    # New reviewers ran; their feedback reached plan_revision.
     council.strangeness.run.assert_called_once()
     council.sensory.run.assert_called_once()
+    council.engine.run.assert_called_once()
+    # Engine reviewer is canon-aware on a non-Earth run.
+    assert council.engine.run.call_args.kwargs["canon_sheet"] == "CANON"
     feedbacks = council.planner.plan_revision.call_args.kwargs["feedbacks"]
-    assert "st" in feedbacks and "se" in feedbacks
+    assert "st" in feedbacks and "se" in feedbacks and "e" in feedbacks
     assert council.planner.plan_revision.call_args.kwargs["non_earth"] is True
 
 
@@ -136,6 +141,7 @@ def test_initial_inner_earth_skips_world_builder():
         "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nS.", "revised_sections": None})
     council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
     council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
+    council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
     council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
@@ -146,6 +152,10 @@ def test_initial_inner_earth_skips_world_builder():
     assert non_earth is False
     assert canon == "" and bible == ""
     council.world_builder.run.assert_not_called()
+    # Engine reviewer runs on EARTH too, with the plan and no canon.
+    council.engine.run.assert_called_once()
+    assert council.engine.run.call_args.kwargs["canon_sheet"] == ""
+    assert "e" in council.planner.plan_revision.call_args.kwargs["feedbacks"]
     # Writer still gets Opus on the INITIAL write (existing behavior), canon empty.
     assert council.writer.run.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
     assert council.writer.run.call_args.kwargs["canon_sheet"] == ""
@@ -169,6 +179,51 @@ def test_run_threads_non_earth_into_middle_and_prose():
     assert council._run_middle.call_args.kwargs["canon_sheet"] == "CANON"
     assert council._run_prose_pass.call_args.kwargs["non_earth"] is True
     assert council._run_prose_pass.call_args.kwargs["world_bible"] == "BIBLE"
+
+
+def test_constraint_threads_into_planner_and_writer():
+    council = WritingCouncil()
+    council.planner.run = MagicMock(return_value={
+        "agent": "PlanningAgent", "output": "<<<SECTION 1>>>\nB."})
+    council.writer.run = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nS.", "revised_sections": None})
+    council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
+    council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
+    council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.writer.revise = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "final", "revised_sections": None})
+
+    council._run_inner(idea="i", target_length="1k", target_audience="a",
+                       constraint="exactly 5 words")
+
+    assert council.planner.run.call_args.kwargs["constraint"] == "exactly 5 words"
+    assert council.writer.run.call_args.kwargs["constraint"] == "exactly 5 words"
+    # And the final revise pass carries it too.
+    assert council.writer.revise.call_args.kwargs["constraint"] == "exactly 5 words"
+
+
+def test_run_surfaces_deterministic_constraint_check():
+    council = WritingCouncil()
+    council._run_inner = MagicMock(
+        return_value=("plan", "<<<SECTION 1>>>\none two three", False, "", "", ""))
+    council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\none two three")
+    council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\none two three")
+
+    result = council.run(idea="i", target_length="1k", target_audience="a",
+                         constraint="exactly 3 words")
+
+    cc = result["constraint_check"]
+    assert cc is not None and cc["passed"] is True
+    assert cc["checks"][0]["actual"] == 3
+
+    # No constraint -> no check.
+    council._run_inner = MagicMock(
+        return_value=("plan", "<<<SECTION 1>>>\nx", False, "", "", ""))
+    council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nx")
+    council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nx")
+    assert council.run(idea="i", target_length="1k",
+                       target_audience="a")["constraint_check"] is None
 
 
 def test_parse_world_class_non_earth():

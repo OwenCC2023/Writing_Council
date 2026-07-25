@@ -58,12 +58,14 @@ def run():
             style=data.get("style", ""),
             image=image,
             title=data.get("title", ""),
+            constraint=data.get("constraint", ""),
         )
         return jsonify({
             "story": result["story"],
             "log": result["log"],
             "non_earth": result.get("non_earth", False),
             "planning_details": result.get("planning_details", ""),
+            "constraint_check": result.get("constraint_check"),
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
