@@ -94,6 +94,12 @@
     margin-top: 1rem; color: var(--err-fg); background: var(--err-bg);
     border: 1px solid var(--err-bdr); padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
   }
+  .cc-pass, .cc-fail {
+    padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.85rem; margin-bottom: 0.75rem;
+    border: 1px solid;
+  }
+  .cc-pass { color: var(--text); background: var(--warn-bg); border-color: var(--warn-bdr); }
+  .cc-fail { color: var(--err-fg); background: var(--err-bg); border-color: var(--err-bdr); }
   .thumb-strip {
     display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem;
   }
@@ -154,6 +160,10 @@
     <label for="style_field">Style <span class="optional">(optional)</span></label>
     <input type="text" id="style_field" name="style_field">
 
+    <label for="constraint">Constraint <span class="optional">(optional)</span></label>
+    <input type="text" id="constraint" name="constraint"
+           placeholder="e.g. exactly 200 words · forbidden words: love, death · told as an obituary">
+
     <label>Image <span class="optional">(optional)</span></label>
     <div class="tabs">
       <button type="button" class="tab-btn active" id="tab-upload">Upload</button>
@@ -178,6 +188,7 @@
 
   <div id="output-section" class="hidden">
     <h2>Output</h2>
+    <div id="constraint-check" class="hidden"></div>
     <textarea id="story-output" readonly></textarea>
     <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
     <button type="button" id="download-btn">Download .docx</button>
@@ -308,6 +319,7 @@
       world_rules:      document.getElementById('world_rules').value.trim(),
       framework:        document.getElementById('framework').value.trim(),
       style:            document.getElementById('style_field').value.trim(),
+      constraint:       document.getElementById('constraint').value.trim(),
     };
     const uploadActive = !panelUpload.classList.contains('hidden');
     if (uploadActive) {
@@ -322,6 +334,20 @@
   }
 
   let lastPlanningDetails = '';
+
+  const constraintCheck = document.getElementById('constraint-check');
+  function renderConstraintCheck(cc) {
+    if (!cc) { constraintCheck.classList.add('hidden'); constraintCheck.textContent = ''; return; }
+    const parts = cc.checks.map(c => {
+      if (c.kind === 'word_count_exact') return 'word count ' + c.actual + '/' + c.target;
+      if (c.kind === 'forbidden_words')
+        return c.found.length ? 'forbidden words found: ' + c.found.join(', ') : 'no forbidden words';
+      return c.kind;
+    });
+    constraintCheck.textContent =
+      (cc.passed ? '✓ Constraint passed — ' : '✗ Constraint failed — ') + parts.join('; ');
+    constraintCheck.className = cc.passed ? 'cc-pass' : 'cc-fail';
+  }
 
   function submitPayload(payload) {
     errorMsg.classList.add('hidden');
@@ -340,6 +366,7 @@
         if (data.error) { showError(data.error); return; }
         storyOutput.value = data.story;
         lastPlanningDetails = data.planning_details || '';
+        renderConstraintCheck(data.constraint_check);
         outputSection.classList.remove('hidden');
         runBtn.disabled = false;
       })
