@@ -1,4 +1,5 @@
 from .base_agent import BaseAgent, FEEDBACK_MODEL
+from .world_calibration import with_canon
 
 SYSTEM_PROMPT = """\
 You are a rival author reviewing another writer's work. You have your own strong aesthetic \
@@ -32,11 +33,12 @@ class PeerWriterAgent(BaseAgent):
     def __init__(self, model: str = FEEDBACK_MODEL):
         super().__init__(model=model)
 
-    def run(self, plan: str, story: str) -> dict:
+    def run(self, plan: str, story: str, canon_sheet: str = "") -> dict:
         user_prompt = (
             f"ORIGINAL PLAN:\n{plan}\n\n"
             f"STORY AS WRITTEN:\n{story}\n\n"
             "Identify the weakest areas and offer specific alternative approaches."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
+        output = self._call_claude(
+            with_canon(SYSTEM_PROMPT, canon_sheet, lower_authority=False), user_prompt)
         return {"agent": "PeerWriterAgent", "output": output}

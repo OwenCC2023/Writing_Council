@@ -33,3 +33,19 @@ def test_both_raises(tmp_path):
             output_path=str(tmp_path / "x.docx"),
             output=io.BytesIO(),
         )
+
+
+def test_save_as_manuscript_handles_marker_free_story():
+    """run() now strips <<<SECTION>>> markers before document_writer sees the
+    story. Confirm a marker-free story still produces a valid .docx."""
+    import io
+    from document_writer import save_as_manuscript
+
+    buf = io.BytesIO()
+    save_as_manuscript(
+        story="First paragraph.\n\nSecond paragraph.",
+        title="Test",
+        author="Author",
+        output=buf,
+    )
+    assert buf.getvalue()[:4] == b"PK\x03\x04"   # .docx is a ZIP

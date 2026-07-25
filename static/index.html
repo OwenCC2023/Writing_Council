@@ -5,57 +5,135 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Writing Council</title>
 <style>
+  :root {
+    --bg:        #1a1a1a;
+    --bg-raised: #242424;
+    --bg-input:  #2c2c2c;
+    --border:    #444;
+    --text:      #ddd;
+    --text-muted:#888;
+    --tab-idle:  #2c2c2c;
+    --btn-run:   #c8b89a;
+    --btn-run-fg:#1a1a1a;
+    --btn-dl:    #3a7a5e;
+    --warn-bg:   #2a2500;
+    --warn-bdr:  #7a6200;
+    --err-bg:    #2a1010;
+    --err-bdr:   #7a3030;
+    --err-fg:    #e88;
+  }
+  .light {
+    --bg:        #f5f0eb;
+    --bg-raised: #fff;
+    --bg-input:  #fff;
+    --border:    #bbb;
+    --text:      #222;
+    --text-muted:#666;
+    --tab-idle:  #e8e0d8;
+    --btn-run:   #3a3a3a;
+    --btn-run-fg:#fff;
+    --btn-dl:    #2a6049;
+    --warn-bg:   #fff8e1;
+    --warn-bdr:  #f0c040;
+    --err-bg:    #fdecea;
+    --err-bdr:   #e57373;
+    --err-fg:    #c0392b;
+  }
   *, *::before, *::after { box-sizing: border-box; }
-  body { font-family: Georgia, serif; background: #f5f0eb; color: #222; margin: 0; padding: 2rem; }
+  body { font-family: Georgia, serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; }
   .container { max-width: 780px; margin: 0 auto; }
-  h1 { font-size: 1.6rem; margin-bottom: 1.5rem; }
+  .header { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  #theme-toggle {
+    margin-left: auto; padding: 0.25rem 0.7rem; font-size: 0.8rem;
+    background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 3px; cursor: pointer; font-family: inherit;
+  }
   label { display: block; font-weight: bold; margin-top: 1rem; margin-bottom: 0.25rem; font-size: 0.9rem; }
   input[type="text"], textarea {
     width: 100%; padding: 0.5rem; font-family: inherit; font-size: 0.95rem;
-    border: 1px solid #bbb; border-radius: 3px; background: #fff;
+    border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg-input); color: var(--text);
   }
   textarea { resize: vertical; min-height: 100px; }
-  .optional { font-weight: normal; color: #666; font-size: 0.8rem; margin-left: 0.4rem; }
+  .optional { font-weight: normal; color: var(--text-muted); font-size: 0.8rem; margin-left: 0.4rem; }
   .tabs { display: flex; margin-top: 1rem; }
   .tab-btn {
-    padding: 0.4rem 1rem; border: 1px solid #bbb; background: #e8e0d8;
-    cursor: pointer; font-size: 0.9rem; border-radius: 3px 3px 0 0;
+    padding: 0.4rem 1rem; border: 1px solid var(--border); background: var(--tab-idle);
+    color: var(--text); cursor: pointer; font-size: 0.9rem; border-radius: 3px 3px 0 0;
     font-family: inherit;
   }
-  .tab-btn.active { background: #fff; border-bottom-color: #fff; }
-  .tab-panel { border: 1px solid #bbb; padding: 0.75rem; background: #fff; border-radius: 0 3px 3px 3px; }
+  .tab-btn.active { background: var(--bg-input); border-bottom-color: var(--bg-input); }
+  .tab-panel { border: 1px solid var(--border); padding: 0.75rem; background: var(--bg-input); border-radius: 0 3px 3px 3px; }
+  input[type="file"] { color: var(--text); }
   .hidden { display: none !important; }
   button[type="submit"] {
     margin-top: 1.5rem; padding: 0.6rem 1.4rem; font-size: 1rem;
-    background: #3a3a3a; color: #fff; border: none; border-radius: 3px;
+    background: var(--btn-run); color: var(--btn-run-fg); border: none; border-radius: 3px;
     cursor: pointer; font-family: inherit;
   }
-  button[type="submit"]:disabled { background: #999; cursor: not-allowed; }
+  button[type="submit"]:disabled { opacity: 0.45; cursor: not-allowed; }
   #download-btn {
     display: block; margin-top: 0.75rem; padding: 0.6rem 1.4rem; font-size: 1rem;
-    background: #2a6049; color: #fff; border: none; border-radius: 3px;
+    background: var(--btn-dl); color: #fff; border: none; border-radius: 3px;
     cursor: pointer; font-family: inherit;
   }
-  #spinner { margin-top: 1.5rem; font-style: italic; color: #555; }
+  #spinner { margin-top: 1.5rem; font-style: italic; color: var(--text-muted); }
   #output-section { margin-top: 2rem; }
   #output-section h2 { font-size: 1.1rem; margin-bottom: 0.5rem; }
   #story-output {
     width: 100%; min-height: 400px; font-family: "Times New Roman", serif;
-    font-size: 0.95rem; padding: 0.75rem; border: 1px solid #bbb; border-radius: 3px;
+    font-size: 0.95rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg-input); color: var(--text);
   }
   .warning {
-    background: #fff8e1; border: 1px solid #f0c040; padding: 0.5rem 0.75rem;
-    border-radius: 3px; font-size: 0.85rem; margin-top: 0.75rem;
+    background: var(--warn-bg); border: 1px solid var(--warn-bdr); padding: 0.5rem 0.75rem;
+    border-radius: 3px; font-size: 0.85rem; margin-top: 0.75rem; color: var(--text);
   }
   #error-msg {
-    margin-top: 1rem; color: #c0392b; background: #fdecea;
-    border: 1px solid #e57373; padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
+    margin-top: 1rem; color: var(--err-fg); background: var(--err-bg);
+    border: 1px solid var(--err-bdr); padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.9rem;
+  }
+  .cc-pass, .cc-fail {
+    padding: 0.5rem 0.75rem; border-radius: 3px; font-size: 0.85rem; margin-bottom: 0.75rem;
+    border: 1px solid;
+  }
+  .cc-pass { color: var(--text); background: var(--warn-bg); border-color: var(--warn-bdr); }
+  .cc-fail { color: var(--err-fg); background: var(--err-bg); border-color: var(--err-bdr); }
+  .thumb-strip {
+    display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.6rem;
+  }
+  .thumb {
+    position: relative; width: 84px;
+  }
+  .thumb img {
+    width: 84px; height: 84px; object-fit: cover; border: 1px solid var(--border);
+    border-radius: 3px; display: block; background: var(--bg-input);
+  }
+  .thumb-name {
+    font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .thumb-remove {
+    position: absolute; top: -6px; right: -6px; width: 20px; height: 20px;
+    border-radius: 50%; border: 1px solid var(--err-bdr); background: var(--err-bg);
+    color: var(--err-fg); cursor: pointer; font-size: 0.75rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center; padding: 0;
+    font-family: inherit;
+  }
+  #remove-all-btn {
+    margin-top: 0.6rem; padding: 0.3rem 0.7rem; font-size: 0.8rem;
+    background: var(--bg-input); color: var(--text); border: 1px solid var(--border);
+    border-radius: 3px; cursor: pointer; font-family: inherit;
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Writing Council</h1>
+  <div class="header">
+    <h1>Writing Council</h1>
+    <button type="button" id="theme-toggle">Light mode</button>
+  </div>
 
   <form id="council-form" novalidate>
     <label for="title">Title *</label>
@@ -82,6 +160,10 @@
     <label for="style_field">Style <span class="optional">(optional)</span></label>
     <input type="text" id="style_field" name="style_field">
 
+    <label for="constraint">Constraint <span class="optional">(optional)</span></label>
+    <input type="text" id="constraint" name="constraint"
+           placeholder="e.g. exactly 200 words · forbidden words: love, death · told as an obituary">
+
     <label>Image <span class="optional">(optional)</span></label>
     <div class="tabs">
       <button type="button" class="tab-btn active" id="tab-upload">Upload</button>
@@ -89,7 +171,9 @@
     </div>
     <div class="tab-panel">
       <div id="panel-upload">
-        <input type="file" id="image_file" accept="image/jpeg,image/png,image/gif,image/webp">
+        <input type="file" id="image_file" accept="image/jpeg,image/png,image/gif,image/webp" multiple>
+        <div class="thumb-strip hidden" id="thumb-strip"></div>
+        <button type="button" id="remove-all-btn" class="hidden">Remove all</button>
       </div>
       <div id="panel-url" class="hidden">
         <input type="text" id="image_url" placeholder="https://example.com/image.png">
@@ -104,6 +188,7 @@
 
   <div id="output-section" class="hidden">
     <h2>Output</h2>
+    <div id="constraint-check" class="hidden"></div>
     <textarea id="story-output" readonly></textarea>
     <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
     <button type="button" id="download-btn">Download .docx</button>
@@ -111,6 +196,16 @@
 </div>
 
 <script>
+  // --- Theme ---
+  const themeBtn = document.getElementById('theme-toggle');
+  function applyTheme(light) {
+    document.body.classList.toggle('light', light);
+    themeBtn.textContent = light ? 'Dark mode' : 'Light mode';
+    localStorage.setItem('wc-theme', light ? 'light' : 'dark');
+  }
+  applyTheme(localStorage.getItem('wc-theme') === 'light');
+  themeBtn.addEventListener('click', () => applyTheme(!document.body.classList.contains('light')));
+
   const form         = document.getElementById('council-form');
   const runBtn       = document.getElementById('run-btn');
   const spinner      = document.getElementById('spinner');
@@ -122,6 +217,67 @@
   const tabUrl       = document.getElementById('tab-url');
   const panelUpload  = document.getElementById('panel-upload');
   const panelUrl     = document.getElementById('panel-url');
+  const imageInput   = document.getElementById('image_file');
+  const thumbStrip   = document.getElementById('thumb-strip');
+  const removeAllBtn = document.getElementById('remove-all-btn');
+
+  // --- Uploaded photos (multi-file, removable before submit) ---
+  let uploadedPhotos = []; // array of File objects
+  let thumbUrls = [];      // parallel array of object URLs, for cleanup
+
+  function renderThumbs() {
+    thumbUrls.forEach(u => URL.revokeObjectURL(u));
+    thumbUrls = uploadedPhotos.map(f => URL.createObjectURL(f));
+    thumbStrip.innerHTML = '';
+    uploadedPhotos.forEach((file, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'thumb';
+
+      const img = document.createElement('img');
+      img.src = thumbUrls[i];
+      img.alt = file.name;
+      thumb.appendChild(img);
+
+      const name = document.createElement('div');
+      name.className = 'thumb-name';
+      name.textContent = file.name;
+      thumb.appendChild(name);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'thumb-remove';
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', 'Remove ' + file.name);
+      removeBtn.addEventListener('click', () => {
+        uploadedPhotos.splice(i, 1);
+        renderThumbs();
+      });
+      thumb.appendChild(removeBtn);
+
+      thumbStrip.appendChild(thumb);
+    });
+    thumbStrip.classList.toggle('hidden', uploadedPhotos.length === 0);
+    removeAllBtn.classList.toggle('hidden', uploadedPhotos.length === 0);
+  }
+
+  function isDuplicate(file) {
+    return uploadedPhotos.some(f =>
+      f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
+    );
+  }
+
+  imageInput.addEventListener('change', () => {
+    for (const file of imageInput.files) {
+      if (!isDuplicate(file)) uploadedPhotos.push(file);
+    }
+    imageInput.value = ''; // allow re-adding a removed file
+    renderThumbs();
+  });
+
+  removeAllBtn.addEventListener('click', () => {
+    uploadedPhotos = [];
+    renderThumbs();
+  });
 
   // --- Image tab switching ---
   tabUpload.addEventListener('click', () => {
@@ -145,27 +301,52 @@
     runBtn.disabled = false;
   }
 
-  function buildPayload(imageDataUrl) {
+  function readAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read "' + file.name + '".'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function buildPayload(imageFilesPayload) {
     const payload = {
+      title:            document.getElementById('title').value.trim(),
       idea:             document.getElementById('idea').value.trim(),
       target_length:    document.getElementById('target_length').value.trim(),
       target_audience:  document.getElementById('target_audience').value.trim(),
       world_rules:      document.getElementById('world_rules').value.trim(),
       framework:        document.getElementById('framework').value.trim(),
       style:            document.getElementById('style_field').value.trim(),
+      constraint:       document.getElementById('constraint').value.trim(),
     };
     const uploadActive = !panelUpload.classList.contains('hidden');
     if (uploadActive) {
-      const file = document.getElementById('image_file').files[0];
-      if (file && imageDataUrl) {
-        payload.image_file     = imageDataUrl;   // full data URI — server strips prefix
-        payload.image_filename = file.name;      // preserves extension for MIME detection
+      if (imageFilesPayload && imageFilesPayload.length) {
+        payload.image_files = imageFilesPayload;   // [{data, filename}, ...]
       }
     } else {
       const url = document.getElementById('image_url').value.trim();
       if (url) payload.image_url = url;
     }
     return payload;
+  }
+
+  let lastPlanningDetails = '';
+
+  const constraintCheck = document.getElementById('constraint-check');
+  function renderConstraintCheck(cc) {
+    if (!cc) { constraintCheck.classList.add('hidden'); constraintCheck.textContent = ''; return; }
+    const parts = cc.checks.map(c => {
+      if (c.kind === 'word_count_exact') return 'word count ' + c.actual + '/' + c.target;
+      if (c.kind === 'forbidden_words')
+        return c.found.length ? 'forbidden words found: ' + c.found.join(', ') : 'no forbidden words';
+      return c.kind;
+    });
+    constraintCheck.textContent =
+      (cc.passed ? '✓ Constraint passed — ' : '✗ Constraint failed — ') + parts.join('; ');
+    constraintCheck.className = cc.passed ? 'cc-pass' : 'cc-fail';
   }
 
   function submitPayload(payload) {
@@ -184,6 +365,8 @@
         spinner.classList.add('hidden');
         if (data.error) { showError(data.error); return; }
         storyOutput.value = data.story;
+        lastPlanningDetails = data.planning_details || '';
+        renderConstraintCheck(data.constraint_check);
         outputSection.classList.remove('hidden');
         runBtn.disabled = false;
       })
@@ -207,12 +390,12 @@
       }
     }
     const uploadActive = !panelUpload.classList.contains('hidden');
-    const file = document.getElementById('image_file').files[0];
-    if (uploadActive && file) {
-      const reader = new FileReader();
-      reader.onload = evt => submitPayload(buildPayload(evt.target.result));
-      reader.onerror = () => showError('Could not read the selected image file.');
-      reader.readAsDataURL(file);
+    if (uploadActive && uploadedPhotos.length) {
+      Promise.all(uploadedPhotos.map(file =>
+        readAsDataURL(file).then(data => ({ data, filename: file.name }))
+      ))
+        .then(imageFilesPayload => submitPayload(buildPayload(imageFilesPayload)))
+        .catch(err => showError(err.message));
     } else {
       submitPayload(buildPayload(null));
     }
@@ -225,7 +408,7 @@
     fetch('/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ story: storyOutput.value, title, author }),
+      body: JSON.stringify({ story: storyOutput.value, title, author, details: lastPlanningDetails }),
     })
       .then(r => {
         if (!r.ok) throw new Error('Save failed (' + r.status + ')');

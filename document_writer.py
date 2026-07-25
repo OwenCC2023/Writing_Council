@@ -1,11 +1,33 @@
 import io
-import re
+from pathlib import Path
 
 from docx import Document
 from docx.shared import Pt, Inches
 from docx.enum.text import WD_LINE_SPACING, WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
+
+_STORY_OUTPUTS = Path(__file__).parent / "story_outputs"
+
+
+def resolve_output_path(title: str) -> Path:
+    """Return a non-colliding .docx path under story_outputs/<title>/.
+
+    Creates the folder if needed. If <title>.docx already exists,
+    returns <title>_v2.docx, _v3.docx, … until a free name is found.
+    """
+    folder = _STORY_OUTPUTS / title
+    folder.mkdir(parents=True, exist_ok=True)
+    candidate = folder / f"{title}.docx"
+    if not candidate.exists():
+        return candidate
+    v = 2
+    while True:
+        candidate = folder / f"{title}_v{v}.docx"
+        if not candidate.exists():
+            return candidate
+        v += 1
 
 
 def _add_page_number(paragraph) -> None:
@@ -31,11 +53,15 @@ def save_as_manuscript(
     author: str,
     output_path: str = None,
     output: io.BytesIO = None,
+    details: str = None,
 ):
     """Save *story* as a standard manuscript-formatted .docx file.
 
     Format: Times New Roman 12pt, double-spaced, 1" margins, 0.5" first-line
     indent, running header: Author / TITLE / page number.
+
+    If *details* is provided (the parameters sent to the initial PlanningAgent),
+    a "Story Parameters" section is appended on a new page after the story.
 
     Returns output_path (str) if writing to a file, or the BytesIO buffer seeked to 0.
     """
@@ -68,7 +94,6 @@ def save_as_manuscript(
     _add_page_number(hdr_para)
 
     # --- Body paragraphs ---
-    story = re.sub(r'<<<SECTION\s+\d+>>>\n?', '', story)
     chunks = [c.strip() for c in story.split("\n\n") if c.strip()]
 
     for chunk in chunks:
@@ -92,6 +117,34 @@ def save_as_manuscript(
             pf.line_spacing_rule = WD_LINE_SPACING.DOUBLE
             pf.first_line_indent = Inches(0.5)
             run = para.add_run(chunk)
+            run.font.name = "Times New Roman"
+            run.font.size = Pt(12)
+
+    # --- Appended parameters page: details sent to the initial PlanningAgent ---
+    if details and details.strip():
+        doc.add_page_break()
+
+        heading = doc.add_paragraph()
+        heading.style = doc.styles["Normal"]
+        hpf = heading.paragraph_format
+        hpf.space_before = Pt(0)
+        hpf.space_after = Pt(0)
+        hpf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        hpf.first_line_indent = Inches(0)
+        hrun = heading.add_run("Story Parameters")
+        hrun.bold = True
+        hrun.font.name = "Times New Roman"
+        hrun.font.size = Pt(12)
+
+        for line in details.split("\n"):
+            para = doc.add_paragraph()
+            para.style = doc.styles["Normal"]
+            dpf = para.paragraph_format
+            dpf.space_before = Pt(0)
+            dpf.space_after = Pt(0)
+            dpf.line_spacing_rule = WD_LINE_SPACING.SINGLE
+            dpf.first_line_indent = Inches(0)
+            run = para.add_run(line)
             run.font.name = "Times New Roman"
             run.font.size = Pt(12)
 

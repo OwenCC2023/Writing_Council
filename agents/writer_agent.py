@@ -1,10 +1,42 @@
 import re
+from pathlib import Path
 
 from .base_agent import BaseAgent
 
 # Output token limit for the initial full write only.
 # Subsequent revise() calls output only changed sections, so 8192 is sufficient there.
 INITIAL_WRITE_MAX_TOKENS = 16000  # ~10k words at ~625 tokens/1k words, with headroom
+
+DEFAULT_BLACKLIST_PATH = Path(__file__).parent.parent / "trope_blacklist.md"
+
+
+def _world_block(canon_sheet: str, world_bible: str) -> str:
+    """Return the appended write-time world block, or '' when no canon sheet."""
+    if not canon_sheet:
+        return ""
+    blacklist = DEFAULT_BLACKLIST_PATH.read_text(encoding="utf-8")
+    return (
+        "\n\n---\n"
+        f"WORLD CANON (obey these rules exactly; they are already resolved, so commit "
+        f"boldly and do not hedge):\n{canon_sheet}\n\n"
+        f"WORLD BIBLE (draw concrete sensory detail from here instead of inventing or "
+        f"reaching for abstractions like 'strange' or 'otherworldly'):\n{world_bible}\n\n"
+        f"AVOID THESE TROPES:\n---\n{blacklist}\n---"
+    )
+
+
+def _constraint_block(constraint: str) -> str:
+    """Return the appended hard-constraint block, or '' when no constraint."""
+    if not constraint:
+        return ""
+    return (
+        "\n\n---\n"
+        f"HARD CONSTRAINT (absolute; obey it on every pass): {constraint}\n"
+        "This rule overrides convenience. If a revision instruction would violate it, keep "
+        "the constraint and satisfy the instruction some other way. Never announce, explain, "
+        "or apologize for the constraint in the prose — the reader should feel its effect, "
+        "not be told the rule."
+    )
 
 SYSTEM_PROMPT = """\
 You are a skilled prose writer. You will be given a detailed narrative plan and your job \
@@ -16,6 +48,14 @@ Honor the plan's prose-weight labels and word budgets: a section marked brief st
 even if it is fun to write, and a section marked extended gets the room it was given. If \
 the plan includes a CHARACTERS section, each character's dialogue must be distinguishable \
 without tags — use the voice guidance it provides.
+
+The plan opens with a STORY ENGINE declaration — the power source this story runs on (mood, \
+voice, situation, structure, language, constraint, document-form, or plot/character). Treat \
+it as binding, not decorative. Every scene must feed that engine: a mood engine means every \
+sentence builds the one atmosphere; a voice engine means the narration's manner is the point \
+and must never flatten into neutral report; a structure or document-form engine means you \
+honor the form exactly. Where a choice would serve generic competence or serve the declared \
+engine, serve the engine.
 
 Write with specificity, varied sentence rhythm, and full scenes. Do not summarize what \
 the plan already describes — render it as lived experience. Trust the reader.
@@ -53,6 +93,12 @@ similes that generalize ("quiet in the way that houses with children are quiet")
 was X and she was Y and" accumulation. Naming an emotion ("she felt a deep sadness") is \
 never the strongest option — render what the body does instead.
 
+The em-dash is also a reflex. Treat it as a scarce resource: no more than one em-dash \
+per 400 words, and never two in the same paragraph. Before typing one, try the sentence \
+with a period, a comma, a colon, or restructured into two sentences — one of those is \
+almost always stronger. Reserve the em-dash for genuine interruption or a turn the \
+sentence could not survive any other way.
+
 Divide your story into logical sections. Begin each section with a marker on its own line \
 in this exact format: <<<SECTION N>>> (N starts at 1, increments by 1). Match the plan's \
 section numbering — plan section N becomes draft <<<SECTION N>>>. Use scene shifts, \
@@ -71,6 +117,8 @@ Apply the same discipline as the initial write:
 - End when the work is done. Do not add closing sentences that explain what just happened.
 - Characters do not say what they mean directly. Cut dialogue that explains the scene or theme.
 - When feedback can be addressed by cutting or by adding, prefer cutting.
+- Ration em-dashes: at most one per 400 words, never two in a paragraph. When revising a
+  sentence that has one, try a period, comma, or colon first.
 
 You are seeing only the sections under revision, not the rest of the draft. The unseen \
 neighboring sections connect to these at their current first and last beats — keep each \
@@ -99,6 +147,8 @@ Apply the same discipline as the initial write:
 - End when the work is done. Do not add closing sentences that explain what just happened.
 - Characters do not say what they mean directly. Cut dialogue that explains the scene or theme.
 - When revision notes can be addressed by cutting or by adding, prefer cutting.
+- Ration em-dashes: at most one per 400 words, never two in a paragraph. When revising a
+  sentence that has one, try a period, comma, or colon first.
 
 Do not explain your changes — just write the improved story. Preserve the \
 <<<SECTION N>>> markers from the original draft in your revised output.\
@@ -114,23 +164,31 @@ class WriterAgent(BaseAgent):
     # Public interface
     # ------------------------------------------------------------------
 
-    def run(self, plan: str) -> dict:
+    def run(self, plan: str, model: str = None,
+            canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+        system_prompt = (SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
+                         + _constraint_block(constraint))
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             "Write the full story based on this plan."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt,
+        output = self._call_claude(system_prompt, user_prompt,
+                                   model=model,
                                    max_tokens=INITIAL_WRITE_MAX_TOKENS)
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
-    def revise(self, plan: str, story: str, feedback: str) -> dict:
+    def revise(self, plan: str, story: str, feedback: str, model: str = None,
+               canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+        world = _world_block(canon_sheet, world_bible) + _constraint_block(constraint)
         sections = self._parse_sections(story)
 
         # No section markers present — fall back to full rewrite.
         if not sections:
             output = self._call_claude(
-                REVISION_FALLBACK_SYSTEM_PROMPT,
+                REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, story, feedback),
+                model=model,
+                max_tokens=INITIAL_WRITE_MAX_TOKENS,
             )
             return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
@@ -148,7 +206,7 @@ class WriterAgent(BaseAgent):
                 prompt = self._build_section_revision_prompt(
                     plan, {k: sections[k] for k in valid}, valid
                 )
-                raw = self._call_claude(REVISION_SYSTEM_PROMPT, prompt)
+                raw = self._call_claude(REVISION_SYSTEM_PROMPT + world, prompt, model=model)
                 revised = self._parse_sections(raw)
                 sections = self._apply_section_revisions(sections, revised)
                 # Only set revised_section_nums if there were no structural ops that
@@ -160,8 +218,10 @@ class WriterAgent(BaseAgent):
         if general_notes:
             rebuilt = self._rebuild_story(sections)
             output = self._call_claude(
-                REVISION_FALLBACK_SYSTEM_PROMPT,
+                REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, rebuilt, general_notes),
+                model=model,
+                max_tokens=INITIAL_WRITE_MAX_TOKENS,
             )
             parsed = self._parse_sections(output)
             sections = parsed if parsed else sections  # keep old sections if markers dropped
