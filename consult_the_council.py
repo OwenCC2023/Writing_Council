@@ -38,36 +38,43 @@ WORLD_RULES = """
     Otherwise, make it purely hard sci-fi here. Make it conform to known physics with realistic travel times and speeds, just in the future.
 """
 
-council = WritingCouncil()
-result = council.run(
-    idea=_load(IDEA_PATH, IDEA),
-    target_length="8,000 words",
-    target_audience="Adult sci-fi readers",
-    world_rules=_load(WORLD_RULES_PATH, WORLD_RULES),
-    framework="Short Story",                     # optional
-    style=STYLE,                                 # optional
-    constraint=CONSTRAINT,                       # optional
-    title=TITLE,
-    # image="path/to/world_reference.png",       # optional — local file or http/https URL;
-    #                                            # the planner will deduce world rules from it
-)
+def main() -> None:
+    """Run a real council pass and save the manuscript. Billed and long —
+    only runs when this file is executed directly, never on import."""
+    council = WritingCouncil()
+    result = council.run(
+        idea=_load(IDEA_PATH, IDEA),
+        target_length="8,000 words",
+        target_audience="Adult sci-fi readers",
+        world_rules=_load(WORLD_RULES_PATH, WORLD_RULES),
+        framework="Short Story",                     # optional
+        style=STYLE,                                 # optional
+        constraint=CONSTRAINT,                       # optional
+        title=TITLE,
+        # image="path/to/world_reference.png",       # optional — local file or http/https URL;
+        #                                            # the planner will deduce world rules from it
+    )
 
-# Save the finished story as a manuscript Word document
-path = save_as_manuscript(
-    story=result["story"],
-    title=TITLE,
-    author=AUTHOR,
-    output_path=resolve_output_path(TITLE),
-    details=result.get("planning_details"),
-)
-print(f"Saved manuscript: {path}")
+    # Save the finished story as a manuscript Word document
+    path = save_as_manuscript(
+        story=result["story"],
+        title=TITLE,
+        author=AUTHOR,
+        output_path=resolve_output_path(TITLE),
+        details=result.get("planning_details"),
+    )
+    print(f"Saved manuscript: {path}")
 
-# Deterministic constraint verification (only when a countable constraint was set)
-cc = result.get("constraint_check")
-if cc:
-    status = "PASSED" if cc["passed"] else "FAILED"
-    print(f"Constraint check {status}: {cc['checks']}")
+    # Deterministic constraint verification (only when a countable constraint was set)
+    cc = result.get("constraint_check")
+    if cc:
+        status = "PASSED" if cc["passed"] else "FAILED"
+        print(f"Constraint check {status}: {cc['checks']}")
 
-# Full log of every agent call
-for entry in result["log"]:
-    print(f"{entry['step']}: {entry['output'][:100]}...")
+    # Full log of every agent call
+    for entry in result["log"]:
+        print(f"{entry['step']}: {entry['output'][:100]}...")
+
+
+if __name__ == "__main__":
+    main()
