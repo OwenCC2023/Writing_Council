@@ -14,7 +14,9 @@ def _load(path: str, fallback: str) -> str:
 # --- Story configuration ---
 TITLE = "The Sforzato"
 AUTHOR = "Owen Cardwell-Copenhefer"
-STYLE = ""  # e.g. "clipped", "flowery", "hemingway", "dark" — or "" for no constraint
+STYLE = ""  # e.g. "clipped", "flowery", "hemingway", "dark" — or "" for no style
+CONSTRAINT = ""  # hard formal rule, e.g. "exactly 200 words", "forbidden words: love, death",
+                 # "told as an obituary", "second person throughout" — or "" for none
 
 IDEA_PATH = ""  # path to a .txt file, or "" to use the inline string below
 IDEA = """
@@ -44,6 +46,7 @@ result = council.run(
     world_rules=_load(WORLD_RULES_PATH, WORLD_RULES),
     framework="Short Story",                     # optional
     style=STYLE,                                 # optional
+    constraint=CONSTRAINT,                       # optional
     title=TITLE,
     # image="path/to/world_reference.png",       # optional — local file or http/https URL;
     #                                            # the planner will deduce world rules from it
@@ -58,6 +61,12 @@ path = save_as_manuscript(
     details=result.get("planning_details"),
 )
 print(f"Saved manuscript: {path}")
+
+# Deterministic constraint verification (only when a countable constraint was set)
+cc = result.get("constraint_check")
+if cc:
+    status = "PASSED" if cc["passed"] else "FAILED"
+    print(f"Constraint check {status}: {cc['checks']}")
 
 # Full log of every agent call
 for entry in result["log"]:

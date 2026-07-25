@@ -15,8 +15,10 @@ from agents import (
     WorldBuilderAgent,
     StrangenessReviewerAgent,
     SensoryQuotaAgent,
+    EngineReviewerAgent,
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL
+from constraints import check_constraint
 
 LOGS_DIR = Path(__file__).parent / "logs"
 
@@ -63,6 +65,7 @@ class WritingCouncil:
         self.world_builder = WorldBuilderAgent()
         self.strangeness = StrangenessReviewerAgent()
         self.sensory = SensoryQuotaAgent()
+        self.engine = EngineReviewerAgent()
         self._log = []
         self._log_file = None
 
@@ -78,6 +81,7 @@ class WritingCouncil:
         prose_passes: int = 1,
         prose_top_n: int = 5,
         title: str = "",
+        constraint: str = "",
     ) -> dict:
         """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
@@ -98,6 +102,11 @@ class WritingCouncil:
                 after the middle loop (default 1).
             prose_top_n: Number of most-egregious prose violations the prose-mode
                 checker reports per pass (default 5).
+            constraint: Optional hard formal constraint (e.g. "exactly 200 words",
+                "forbidden words: love, death", "told as an obituary"). The planner
+                translates it into rules and the writer honors it on every pass;
+                countable constraints are also verified deterministically and
+                surfaced as ``constraint_check`` on the result.
         """
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
@@ -117,6 +126,7 @@ class WritingCouncil:
             style=style,
             image=image,
             title=title,
+            constraint=constraint,
             label="outer.inner",
         )
 
@@ -124,19 +134,22 @@ class WritingCouncil:
         print("[outer] Starting middle loop...")
         story = self._run_middle(plan, story, target_audience,
                                  non_earth=non_earth, canon_sheet=canon_sheet,
-                                 world_bible=world_bible)
+                                 world_bible=world_bible, constraint=constraint)
 
         # Final prose-cleanup pass(es)
         for i in range(prose_passes):
             print(f"[outer] Starting prose-cleanup pass {i + 1}/{prose_passes}...")
             story = self._run_prose_pass(
                 plan, story, top_n=prose_top_n, label=f"prose.{i + 1}",
-                non_earth=non_earth, canon_sheet=canon_sheet, world_bible=world_bible)
+                non_earth=non_earth, canon_sheet=canon_sheet, world_bible=world_bible,
+                constraint=constraint)
 
         # Section markers survive until here (the prose passes need them); strip last.
         story = self._strip_section_markers(story)
         return {"story": story, "non_earth": non_earth,
-                "planning_details": planning_details, "log": list(self._log)}
+                "planning_details": planning_details,
+                "constraint_check": check_constraint(constraint, story),
+                "log": list(self._log)}
 
     # ------------------------------------------------------------------
     # Inner loop: 1 → 2 → (4∥3) → 1(plan_revision) → 2
@@ -159,6 +172,7 @@ class WritingCouncil:
         style: str = "",
         image: str | list = "",
         title: str = "",
+        constraint: str = "",
         plan: str = None,
         story: str = None,
         middle_feedbacks: list = None,
@@ -182,6 +196,7 @@ class WritingCouncil:
                 f"world_rules: {world_rules or '(none)'}\n"
                 f"framework: {framework or '(none)'}\n"
                 f"style: {style or '(none)'}\n"
+                f"constraint: {constraint or '(none)'}\n"
                 f"image: {image_desc or '(none)'}"
             )
             planning_details = input_text
@@ -196,6 +211,7 @@ class WritingCouncil:
                 image=image,
                 model=INITIAL_DRAFT_MODEL,
                 title=title,
+                constraint=constraint,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
@@ -222,7 +238,7 @@ class WritingCouncil:
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
             write_result = self.writer.run(
                 plan=plan, model=INITIAL_DRAFT_MODEL,
-                canon_sheet=canon_sheet, world_bible=world_bible)
+                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
@@ -252,7 +268,7 @@ class WritingCouncil:
             write_result = self.writer.revise(
                 plan=plan, story=story, feedback=pre_write_plan,
                 model=(INITIAL_DRAFT_MODEL if non_earth else None),
-                canon_sheet=canon_sheet, world_bible=world_bible)
+                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
@@ -267,31 +283,36 @@ class WritingCouncil:
         check_label = (
             f"sections {revised_sections}" if revised_sections is not None else "full story"
         )
-        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent"
-              f"{' , StrangenessReviewerAgent and SensoryQuotaAgent' if non_earth else ''} "
+        print(f"[{label}] Running ConsistencyAgent, AIFailureCheckerAgent, EngineReviewerAgent"
+              f"{', StrangenessReviewerAgent and SensoryQuotaAgent' if non_earth else ''} "
               f"in parallel ({check_label})...")
         self._log_start(f"{label}.consistency", "ConsistencyAgent", f"story:\n{check_text}")
         self._log_start(f"{label}.ai_check", "AIFailureCheckerAgent", f"story:\n{check_text}")
+        self._log_start(f"{label}.engine", "EngineReviewerAgent", f"story:\n{check_text}")
         if non_earth:
             self._log_start(f"{label}.strangeness", "StrangenessReviewerAgent",
                             f"story:\n{check_text}")
             self._log_start(f"{label}.sensory", "SensoryQuotaAgent", f"story:\n{check_text}")
-        workers = 4 if non_earth else 2
+        workers = 5 if non_earth else 3
         with ThreadPoolExecutor(max_workers=workers) as executor:
             f_cons = executor.submit(self.consistency.run, story=check_text,
                                      canon_sheet=canon_sheet)
             f_ai = executor.submit(self.ai_checker.run, story=check_text,
                                    canon_sheet=canon_sheet)
+            f_eng = executor.submit(self.engine.run, plan=plan, story=check_text,
+                                    canon_sheet=canon_sheet)
             f_str = executor.submit(self.strangeness.run, story=check_text,
                                     canon_sheet=canon_sheet) if non_earth else None
             f_sen = executor.submit(self.sensory.run, story=check_text,
                                     canon_sheet=canon_sheet) if non_earth else None
             cons_result = f_cons.result()
             ai_result = f_ai.result()
+            eng_result = f_eng.result()
             str_result = f_str.result() if f_str else None
             sen_result = f_sen.result() if f_sen else None
         self._log_end(cons_result, step=f"{label}.consistency")
         self._log_end(ai_result, step=f"{label}.ai_check")
+        self._log_end(eng_result, step=f"{label}.engine")
         if str_result:
             self._log_end(str_result, step=f"{label}.strangeness")
         if sen_result:
@@ -299,7 +320,7 @@ class WritingCouncil:
 
         # ---- Second 1: plan_revision on checker outputs ----
         print(f"[{label}] Running PlanningAgent (plan revision from checkers)...")
-        feedbacks = [cons_result["output"], ai_result["output"]]
+        feedbacks = [cons_result["output"], ai_result["output"], eng_result["output"]]
         if str_result:
             feedbacks.append(str_result["output"])
         if sen_result:
@@ -326,7 +347,7 @@ class WritingCouncil:
         result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if non_earth else None),
-            canon_sheet=canon_sheet, world_bible=world_bible)
+            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
@@ -337,7 +358,7 @@ class WritingCouncil:
     # ------------------------------------------------------------------
     def _run_middle(self, plan: str, story: str, target_audience: str,
                     non_earth: bool = False, canon_sheet: str = "",
-                    world_bible: str = "") -> str:
+                    world_bible: str = "", constraint: str = "") -> str:
         # 5, 6, 7, 8 — all four reviewers in parallel
         print("[middle] Running PeerWriterAgent, EditorAgent, MarketingAgent, "
               "AudienceAgent in parallel...")
@@ -385,6 +406,7 @@ class WritingCouncil:
             non_earth=non_earth,
             canon_sheet=canon_sheet,
             world_bible=world_bible,
+            constraint=constraint,
         )
         return story
 
@@ -393,7 +415,8 @@ class WritingCouncil:
     # ------------------------------------------------------------------
     def _run_prose_pass(self, plan: str, story: str, top_n: int = 5,
                         label: str = "prose", non_earth: bool = False,
-                        canon_sheet: str = "", world_bible: str = "") -> str:
+                        canon_sheet: str = "", world_bible: str = "",
+                        constraint: str = "") -> str:
         """One line-level polish pass. Runs consistency + prose-mode checker in
         parallel, forces all prose findings into a section-revision plan, and
         applies it. Returns the revised story (markers intact)."""
@@ -428,7 +451,7 @@ class WritingCouncil:
         write_result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if non_earth else None),
-            canon_sheet=canon_sheet, world_bible=world_bible)
+            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
         self._log_end(write_result, step=f"{label}.write")
         return write_result["output"]
 
