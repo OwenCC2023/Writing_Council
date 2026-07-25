@@ -22,7 +22,7 @@ def test_initial_inner_runs_plan_and_write_on_opus():
     assert council.writer.run.call_args.kwargs["model"] == INITIAL_DRAFT_MODEL
     # Revisions carry no model override -> stay on the agent's default.
     assert council.writer.revise.call_args.kwargs.get("model") is None
-    assert INITIAL_DRAFT_MODEL == "claude-opus-4-8"
+    assert INITIAL_DRAFT_MODEL == "claude-opus-5"
 
 
 def test_strip_section_markers_removes_markers_keeps_prose():

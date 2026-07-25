@@ -6,11 +6,18 @@ import anthropic
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
-FEEDBACK_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MODEL = "claude-sonnet-5"
+FEEDBACK_MODEL = "claude-haiku-4-5"
 # Model for the initial plan + initial write only (Outer's first inner call).
 # Revisions and reviewers keep their own models.
-INITIAL_DRAFT_MODEL = "claude-opus-4-8"
+INITIAL_DRAFT_MODEL = "claude-opus-5"
+
+# The Sonnet 5 / Opus 5 family runs adaptive thinking on by default when the
+# `thinking` field is omitted, which would (a) place a thinking block at
+# content[0] and (b) spend output tokens on reasoning. We keep the pipeline's
+# behavior controlled by disabling thinking on every call. Text extraction also
+# tolerates a leading non-text block defensively.
+_THINKING_DISABLED = {"type": "disabled"}
 
 _IMAGE_MEDIA_TYPES = {
     ".jpg": "image/jpeg",
@@ -28,6 +35,15 @@ class BaseAgent:
         self.model = model
         self.client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
+    @staticmethod
+    def _first_text(response) -> str:
+        """Return the first text block's text, tolerating a leading non-text
+        (e.g. thinking) block. Falls back to content[0].text."""
+        for block in response.content:
+            if getattr(block, "type", None) == "text":
+                return block.text
+        return response.content[0].text
+
     def _call_claude(
         self,
         system_prompt: str,
@@ -39,10 +55,11 @@ class BaseAgent:
         response = self.client.messages.create(
             model=model or self.model,
             max_tokens=max_tokens,
+            thinking=_THINKING_DISABLED,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        return response.content[0].text
+        return self._first_text(response)
 
     def _call_claude_with_image(
         self,
@@ -82,7 +99,8 @@ class BaseAgent:
         response = self.client.messages.create(
             model=model or self.model,
             max_tokens=max_tokens,
+            thinking=_THINKING_DISABLED,
             system=system_prompt,
             messages=[{"role": "user", "content": content}],
         )
-        return response.content[0].text
+        return self._first_text(response)
