@@ -17,13 +17,20 @@ from agents import (
     SensoryQuotaAgent,
     EngineReviewerAgent,
 )
-from agents.base_agent import INITIAL_DRAFT_MODEL
+from agents.base_agent import INITIAL_DRAFT_MODEL, max_tokens_for
+from agents.intake_agent import IntakeAgent, parse_brief
+from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
+from story_intake import word_count
 
 LOGS_DIR = Path(__file__).parent / "logs"
 
 _DIVIDER = "=" * 80
 _THIN = "-" * 80
+
+MAX_SOURCE_WORDS = 110_000   # ~150k tokens; leaves window headroom for prompts
+REVISE_WARN_WORDS = 20_000   # cost cliff: revise re-sends the draft every pass
+REWRITE_MODES = ("reimagine", "revise")
 
 
 class WritingCouncil:
@@ -66,8 +73,25 @@ class WritingCouncil:
         self.strangeness = StrangenessReviewerAgent()
         self.sensory = SensoryQuotaAgent()
         self.engine = EngineReviewerAgent()
+        self.intake = IntakeAgent()
         self._log = []
         self._log_file = None
+
+    def _merge_brief(self, fields: dict, *, idea: str, world_rules: str,
+                     framework: str, target_length: str, title: str,
+                     filename_stem: str = "") -> dict:
+        """A non-empty user value wins; otherwise the brief fills it in.
+
+        Craft params only. target_audience, style, and constraint have no brief
+        fallback — the user owns them.
+        """
+        return {
+            "idea": idea or fields.get("SYNOPSIS", ""),
+            "world_rules": world_rules or fields.get("WORLD RULES", ""),
+            "framework": framework or fields.get("STORYLINE/STRUCTURE", ""),
+            "target_length": target_length or fields.get("LENGTH", ""),
+            "title": title or fields.get("TITLE", "") or filename_stem,
+        }
 
     def run(
         self,
@@ -82,6 +106,10 @@ class WritingCouncil:
         prose_top_n: int = 5,
         title: str = "",
         constraint: str = "",
+        source_story: str = "",
+        rewrite_mode: str = "",
+        rewrite_notes: str = "",
+        source_filename: str = "",
     ) -> dict:
         """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
@@ -115,6 +143,45 @@ class WritingCouncil:
         self._log_file.write_text("", encoding="utf-8")
         print(f"Logging to {self._log_file}")
 
+        brief_text = ""
+        if source_story:
+            mode = rewrite_mode or "reimagine"
+            if mode not in REWRITE_MODES:
+                raise ValueError(
+                    f"Unknown rewrite_mode {mode!r}; expected one of {REWRITE_MODES}."
+                )
+            words = word_count(source_story)
+            if words > MAX_SOURCE_WORDS:
+                raise ValueError(
+                    f"Source story is {words:,} words; the limit is "
+                    f"{MAX_SOURCE_WORDS}. Chunked intake is not supported."
+                )
+            if mode == "revise" and words > REVISE_WARN_WORDS:
+                print(f"[outer] WARNING: {words:,}-word revise run. The full draft is "
+                      f"re-sent to the writer and every checker on each pass; expect "
+                      f"cost to scale with length.")
+
+            print("[outer] Running IntakeAgent on the uploaded story...")
+            self._log_start("outer.intake", "IntakeAgent",
+                            f"words: {words}\nrewrite_notes: {rewrite_notes or '(none)'}")
+            intake_result = self.intake.run(story=source_story,
+                                            rewrite_notes=rewrite_notes,
+                                            source_words=words)
+            self._log_end(intake_result, step="outer.intake")
+            brief_text = intake_result["output"]
+
+            merged = self._merge_brief(
+                parse_brief(brief_text), idea=idea, world_rules=world_rules,
+                framework=framework, target_length=target_length, title=title,
+                filename_stem=Path(source_filename).stem if source_filename else "")
+            idea = merged["idea"]
+            world_rules = merged["world_rules"]
+            framework = merged["framework"]
+            target_length = merged["target_length"]
+            title = merged["title"]
+        else:
+            mode = ""
+
         # Inner — generates plan and initial story
         print("[outer] Starting inner loop (initial write)...")
         plan, story, non_earth, canon_sheet, world_bible, planning_details = self._run_inner(
@@ -127,6 +194,8 @@ class WritingCouncil:
             image=image,
             title=title,
             constraint=constraint,
+            brief=brief_text,
+            rewrite_notes=rewrite_notes,
             label="outer.inner",
         )
 
@@ -149,6 +218,10 @@ class WritingCouncil:
         return {"story": story, "non_earth": non_earth,
                 "planning_details": planning_details,
                 "constraint_check": check_constraint(constraint, story),
+                "intake_brief": brief_text,
+                "rewrite_mode": mode,
+                "title": title,
+                "target_length": target_length,
                 "log": list(self._log)}
 
     # ------------------------------------------------------------------
@@ -180,8 +253,12 @@ class WritingCouncil:
         non_earth: bool = False,
         canon_sheet: str = "",
         world_bible: str = "",
+        brief: str = "",
+        rewrite_notes: str = "",
     ) -> tuple:
         """Returns (plan, story, non_earth, canon_sheet, world_bible, planning_details)."""
+
+        write_max_tokens = max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS)
 
         planning_details = ""
         if idea is not None:
@@ -201,6 +278,11 @@ class WritingCouncil:
             )
             planning_details = input_text
             self._log_start(f"{label}.plan", "PlanningAgent", input_text)
+            extra = {}
+            if brief:
+                extra["brief"] = brief
+            if rewrite_notes:
+                extra["rewrite_notes"] = rewrite_notes
             result = self.planner.run(
                 idea=idea,
                 target_length=target_length,
@@ -212,6 +294,7 @@ class WritingCouncil:
                 model=INITIAL_DRAFT_MODEL,
                 title=title,
                 constraint=constraint,
+                **extra,
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
@@ -238,7 +321,8 @@ class WritingCouncil:
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
             write_result = self.writer.run(
                 plan=plan, model=INITIAL_DRAFT_MODEL,
-                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
+                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
+                max_tokens=write_max_tokens)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
@@ -268,7 +352,8 @@ class WritingCouncil:
             write_result = self.writer.revise(
                 plan=plan, story=story, feedback=pre_write_plan,
                 model=(INITIAL_DRAFT_MODEL if non_earth else None),
-                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
+                canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
+                max_tokens=write_max_tokens)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
 
