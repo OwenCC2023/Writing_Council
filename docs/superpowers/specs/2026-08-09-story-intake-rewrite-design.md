@@ -17,7 +17,11 @@ Two rewrite modes:
 - **revise** — the original text is seeded as the initial draft and run through the
   review/revise loops. Author sentences survive where reviewers don't object.
 
-An empty `source_story` leaves the existing pipeline byte-for-byte unchanged.
+An empty `source_story` leaves the existing pipeline's **prompt text** byte-for-byte
+unchanged — which is what the repo's prompt-string tests actually guard. One deliberate
+exception applies to every run, upload or not: writer `max_tokens` is derived from
+`target_length` instead of the flat 8192 (see below). It is a ceiling raise, so no existing
+run can produce less than it does today.
 
 ## Components
 
@@ -29,7 +33,10 @@ An empty `source_story` leaves the existing pipeline byte-for-byte unchanged.
 - `.docx`: python-docx (already in `requirements.txt`, used by `document_writer`);
   paragraphs joined with a blank line between.
 - Raises on unsupported extension, unreadable file, or empty text.
-- Raises above 110,000 words, reporting the count (see Error handling).
+
+The 110,000-word cap does **not** live here. The server also accepts pasted `story_text`,
+which never touches this function, so the guard belongs in `WritingCouncil.run` where both
+paths converge. This function only loads.
 
 Manuscript front matter is **not** stripped here. A `.docx` produced by `document_writer`
 opens with a byline, a contact block, a word count, and a title page; stripping those
@@ -101,7 +108,10 @@ markers exist.
   what intake was called to extract. The brief goes through whole; the merge governs only
   the craft params (length, audience, style, title, world_rules, framework).
 - `rewrite_notes: str = ""` — rendered as its own `REWRITE DIRECTIVE:` block. Not folded
-  into `framework`, which already carries the structure text.
+  into `framework`, which already carries the structure text. The prompt states that the
+  directive **outranks TARGET LENGTH** when the two conflict: leaving length blank and
+  writing "cut it to 3,000 words" in the notes otherwise hands the planner the brief's
+  8,432-word LENGTH and a contradicting instruction.
 - `source_story: str = ""` plus `plan_existing: bool = False` — revise mode only. A prompt
   addendum instructs the planner to plan the story that exists rather than invent one.
 
@@ -128,10 +138,19 @@ Returns `intake_brief`, `rewrite_mode`, and the **resolved** `title` and `target
 alongside the existing keys. The resolved values matter: `/save` takes the title from the
 client, so when the brief supplied it the browser has no other way to learn it.
 
-Writer calls raise `max_tokens` above the 8192 default (`agents/base_agent.py:52`) when
-`source_story` is set. 8192 tokens is roughly 6,000 words; the council's usual 8k-word
-target only fits because the writer emits changed sections only. A 20k-word upload makes a
-multi-section revision overrun that and truncate mid-draft.
+### Writer `max_tokens` derived from `target_length` (changed, applies to every run)
+
+The flat 8192 default (`agents/base_agent.py:52`) is roughly 6,000 words. Today's 8k-word
+runs only fit because the writer emits changed sections only; a full-draft emission at that
+target already sits over the ceiling, and a 20k-word upload blows through it and truncates
+mid-draft. Scoping the fix to `source_story` would leave the same latent bug on long fresh
+runs, because the risk comes from output size, not from where the input came from.
+
+So: a helper parses a word count out of `target_length` and returns
+`clamp(words * 1.4, 8192, 32000)` tokens, passed to writer calls. Unparseable or absent
+`target_length` → 8192, exactly today's value. This is a ceiling raise only — no run can
+emit less than it does now, and prompt text is untouched, so the prompt-string regression
+tests are unaffected.
 
 ### `_run_inner` gains a seeded branch (changed)
 
@@ -158,8 +177,9 @@ Everything revise mode needs before the loops, kept out of `_run_inner`:
 
 1. `PlanningAgent.run(plan_existing=True, source_story=..., model=INITIAL_DRAFT_MODEL, ...)`.
 2. `_parse_world_class` on the result → `non_earth`, tag stripped.
-3. If `non_earth`: `WorldBuilderAgent.run(idea=<brief SYNOPSIS>, plan=plan, world_rules=...)`
-   → canon and bible. `revise_with_world_bible` is **not** called (see below).
+3. If `non_earth`: `WorldBuilderAgent.run(idea=<the merged idea>, plan=plan, world_rules=...)`
+   → canon and bible. The merged idea, not the raw SYNOPSIS — a user-supplied idea still
+   wins. `revise_with_world_bible` is **not** called (see below).
 4. `sectionize(plan, source_story)` → the draft with `<<<SECTION N>>>` markers.
 5. Build `planning_details` — the same input echo the initial branch builds, plus
    `rewrite_mode`, `rewrite_notes`, and the source word count. Without this a revise run
@@ -188,8 +208,13 @@ result += {"intake_brief": ..., "rewrite_mode": ..., "title": ..., "target_lengt
 ```
 
 Intake and the merge both happen inside `WritingCouncil.run`, before `_run_inner` is
-called, so the CLI, server, and UI all get the behavior from one place.
+called, so the CLI, server, and UI all get the behavior from one place. The 110,000-word
+guard lives here too, covering uploaded and pasted text alike.
 `rewrite_notes` goes to both the intake agent and the planner.
+
+When `source_story` is empty the orchestrator **omits** `brief`, `rewrite_notes`, and
+`source_story` from the `PlanningAgent.run` call rather than passing `""`. That is what
+keeps the existing planner call-args assertions green.
 
 ### Blank means blank
 
@@ -247,7 +272,8 @@ can never win.
 - python-docx missing: ImportError naming `pip install python-docx`.
 - Unrecognized `rewrite_mode`: `ValueError` before any API call. Empty defaults to
   `"reimagine"`.
-- **Over 110,000 words: refuse, reporting the count.** That is roughly 150k tokens, leaving
+- **Over 110,000 words: refuse in `WritingCouncil.run`, reporting the count.** Checked
+  there, not in `load_story_text`, so pasted `story_text` is covered too. That is roughly 150k tokens, leaving
   headroom in a 200k window for the system prompt and the brief. Chunked intake is out of
   scope.
 - **Revise mode above 20,000 words: print a cost warning and continue.** Revise mode re-sends
@@ -266,19 +292,23 @@ All tests mock LLM calls (`unittest.mock.patch`); no real API calls, per repo co
   stripping is the intake prompt's and the sectionizer's job, not this function's.
 - `/run` with a `story_file`: the temp file is deleted in `finally`, and the response
   carries `intake_brief`, `rewrite_mode`, `title`, and `target_length`.
-- Writer `max_tokens` is raised when `source_story` is set, and untouched when it isn't.
+- Writer `max_tokens`: `"20,000 words"` → 28,000; `"8,000 words"` → 11,200; `"200 words"`
+  and an unparseable string → the 8192 floor; an absurd target clamps to 32,000.
 - Brief parsing: complete block and a block with missing fields.
 - Merge precedence: a user value wins; a blank falls back to the brief.
 - `orchestrator.run` with `source_story=""` is unchanged — assert the planner is called with
-  today's exact arguments. This is the EARTH byte-for-byte regression guard.
-- Reimagine: the planner receives the synopsis-derived idea and never the original prose.
+  today's exact arguments and that the three new kwargs are absent, not `""`. This is the
+  prompt-text regression guard.
+- Reimagine: the planner receives the merged idea and the full brief, and never the
+  original prose.
 - Revise: the writer's first-write call is not made; checkers receive the marked original;
   `revise_with_world_bible` is not called on a `non_earth` revise run.
 - Seeded `_run_inner`: reaches the checker fan-out with no `write_result` in scope —
   the guard against the `revised_sections` crash.
 - Sectionizer: anchors insert markers without altering surrounding text; a duplicate anchor
   is rejected; the glyph and blank-line fallbacks work; text before anchor 1 is dropped.
-- Word-count limits: 110k refuses; a 25k-word revise run warns but proceeds.
+- Word-count limits: 110k refuses via `run()` for both an uploaded file and pasted
+  `story_text`; a 25k-word revise run warns but proceeds.
 - Invalid `rewrite_mode` raises; empty mode with a `source_story` runs reimagine.
 - The planner receives the full brief in both modes — assert CHARACTERS and PLOT text
   reaches `PlanningAgent.run`, not just the synopsis.
