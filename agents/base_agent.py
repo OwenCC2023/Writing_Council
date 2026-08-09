@@ -28,7 +28,10 @@ def max_tokens_for(target_length: str, floor: int) -> int:
     match = re.search(r"[\d,]+", target_length or "")
     if not match:
         return floor
-    words = int(match.group().replace(",", ""))
+    digits = match.group().replace(",", "")
+    if not digits:
+        return floor
+    words = int(digits)
     return max(floor, min(int(words * _TOKENS_PER_WORD), MAX_OUTPUT_TOKENS))
 
 # The Sonnet 5 / Opus 5 family runs adaptive thinking on by default when the

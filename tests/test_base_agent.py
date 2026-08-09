@@ -22,3 +22,10 @@ def test_unparseable_or_missing_target_returns_the_floor():
     assert max_tokens_for("novella length", 16000) == 16000
     assert max_tokens_for("", 16000) == 16000
     assert max_tokens_for(None, 8192) == 8192
+
+
+def test_malformed_numeric_input_returns_the_floor():
+    """Lone comma or comma-only string match the digit pattern but leave
+    no digits after stripping. These should return floor, not raise ValueError."""
+    assert max_tokens_for(",", 16000) == 16000
+    assert max_tokens_for(",,,", 8192) == 8192
