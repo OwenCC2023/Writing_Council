@@ -11,9 +11,11 @@ plans, writes, reviews, and revises a short story, then exports it as a manuscri
 ## Running
 
 ```bash
-python consult_the_council.py   # CLI run; story config is inline at the top of the file
+python consult_the_council.py   # CLI run; story config is inline at the top of the file,
+                                 # including SOURCE_STORY_PATH for a rewrite run
 python server.py                # browser UI at http://127.0.0.1:5000 (or launch.bat)
-python -m pytest tests -q      # test suite (server tests need flask installed)
+python -m pytest tests -q      # Python test suite (server tests need flask installed)
+npm test                        # JS test suite (static/index.html), vitest + jsdom
 ```
 
 Requires `ANTHROPIC_API_KEY` in `.env` at the repo root. Runs are long (minutes) and
@@ -116,6 +118,55 @@ strip — per-photo X button and remove-all; removed photos are excluded from th
 `POST /run` accepts `image_files: [{data: <dataURI>, filename}]`, writes one temp file
 per photo, and deletes them all after the run. Legacy single `image_file`/`image_url`
 fields still work.
+
+## Story intake and rewrite
+
+`WritingCouncil.run(source_story=...)` rewrites an uploaded `.txt`/`.md`/`.docx` story
+instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
+
+- **reimagine** (default) — `_run_inner`'s initial branch runs as normal, but
+  `PlanningAgent.run` gets the intake `brief` (and `rewrite_notes`) alongside `idea`;
+  the original prose itself never reaches the writer.
+- **revise** — `_run_revise_setup` plans the existing story (`plan_existing=True`),
+  classifies it, world-builds if `non_earth`, and sectionizes it; `_run_inner(seeded=True,
+  ...)` then skips the plan and initial-write calls and starts straight at the checker
+  fan-out, so the uploaded draft is the first draft the review/revise loops see.
+
+- `agents/intake_agent.py:IntakeAgent` (DEFAULT_MODEL) digests the source text into a
+  fixed-shape `=== STORY BRIEF ===` block (title, world-class guess, genre, setting,
+  world rules, characters, plot, structure, intent, length, synopsis); `parse_brief`
+  turns it back into a dict. Its `WORLD_CLASS_GUESS` is advisory only —
+  `PlanningAgent` remains the sole authority for the `<<<WORLD_CLASS>>>` tag that trips
+  `non_earth`, on both rewrite paths.
+- The whole brief text reaches `PlanningAgent` (as `brief`, plus `source_story` and
+  `PLAN_EXISTING_ADDENDUM` on revise) so it can plan off everything the intake noticed.
+  `WritingCouncil._merge_brief`, by contrast, only backfills unset **craft params** —
+  `idea`, `world_rules`, `framework`, `target_length`, `title` — a non-empty user value
+  always wins over the brief. `target_audience`, `style`, and `constraint` have no brief
+  fallback; the user owns them outright.
+- On revise, `PLAN_EXISTING_ADDENDUM` overrides `CLASSIFY_ADDENDUM`'s NON-EARTH
+  "more, smaller sections" rule: section count must follow the draft's own scene
+  structure, or `agents/sectionizer_agent.py` can't map planned sections onto it.
+  `SectionizerAgent` (FEEDBACK_MODEL) returns one anchor phrase per section; Python
+  (`insert_markers`) inserts the `<<<SECTION N>>>` markers deterministically — the
+  prose is never re-emitted by the model, so it can't mutate. `fallback_sectionize`
+  groups the draft by scene-break glyphs or blank lines if the anchors don't fit the
+  draft cleanly.
+- A `non_earth` revise run still runs `WorldBuilderAgent` for canon/bible, but
+  `PlanningAgent.revise_with_world_bible` is deliberately skipped — it rewrites the plan
+  to exploit the world, which would pull the plan away from the draft it has to describe.
+- `story_intake.py:load_story_text` reads the file and has no policy of its own: it
+  doesn't strip manuscript front matter (the intake prompt is told to ignore it) and
+  doesn't enforce a length cap. `MAX_SOURCE_WORDS` (110,000 words) is enforced in
+  `WritingCouncil.run` and raises; `REVISE_WARN_WORDS` (20,000 words) only warns, since
+  revise re-sends the full draft to the writer and every checker on each pass.
+- `run()` returns `intake_brief`, `rewrite_mode`, and the resolved `title` and
+  `target_length` (post-merge) alongside the usual `story`/`non_earth`/`planning_details`.
+- `server.py`'s `/run` accepts `story_file` (uploaded, written to a temp path and cleaned
+  up after the run) or `story_text` (pasted), plus `rewrite_mode`/`rewrite_notes`.
+  `static/index.html` adds an upload control, mode radios, a notes box, and blanks
+  target length/audience on upload (with a restore control) since a rewrite run can take
+  those from the brief.
 
 ## Conventions
 
