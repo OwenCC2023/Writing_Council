@@ -165,7 +165,8 @@ class WriterAgent(BaseAgent):
     # ------------------------------------------------------------------
 
     def run(self, plan: str, model: str = None,
-            canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+            canon_sheet: str = "", world_bible: str = "", constraint: str = "",
+            max_tokens: int = None) -> dict:
         system_prompt = (SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
                          + _constraint_block(constraint))
         user_prompt = (
@@ -174,11 +175,12 @@ class WriterAgent(BaseAgent):
         )
         output = self._call_claude(system_prompt, user_prompt,
                                    model=model,
-                                   max_tokens=INITIAL_WRITE_MAX_TOKENS)
+                                   max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS)
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
     def revise(self, plan: str, story: str, feedback: str, model: str = None,
-               canon_sheet: str = "", world_bible: str = "", constraint: str = "") -> dict:
+               canon_sheet: str = "", world_bible: str = "", constraint: str = "",
+               max_tokens: int = None) -> dict:
         world = _world_block(canon_sheet, world_bible) + _constraint_block(constraint)
         sections = self._parse_sections(story)
 
@@ -188,7 +190,7 @@ class WriterAgent(BaseAgent):
                 REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, story, feedback),
                 model=model,
-                max_tokens=INITIAL_WRITE_MAX_TOKENS,
+                max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS,
             )
             return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
@@ -221,7 +223,7 @@ class WriterAgent(BaseAgent):
                 REVISION_FALLBACK_SYSTEM_PROMPT + world,
                 self._build_fallback_prompt(plan, rebuilt, general_notes),
                 model=model,
-                max_tokens=INITIAL_WRITE_MAX_TOKENS,
+                max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS,
             )
             parsed = self._parse_sections(output)
             sections = parsed if parsed else sections  # keep old sections if markers dropped

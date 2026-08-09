@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from agents.writer_agent import WriterAgent, SYSTEM_PROMPT
+from agents.writer_agent import WriterAgent, SYSTEM_PROMPT, INITIAL_WRITE_MAX_TOKENS
 
 
 def test_run_threads_model_override_to_call():
@@ -72,3 +72,25 @@ def test_revise_forwards_model_on_fallback():
         agent.revise(plan="p", story="no markers", feedback="notes",
                      model="claude-opus-4-8")
     assert m.call_args.kwargs["model"] == "claude-opus-4-8"
+
+
+def test_run_defaults_to_the_existing_write_budget():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p")
+    assert m.call_args.kwargs["max_tokens"] == INITIAL_WRITE_MAX_TOKENS
+
+
+def test_run_honors_an_explicit_budget():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p", max_tokens=28000)
+    assert m.call_args.kwargs["max_tokens"] == 28000
+
+
+def test_revise_fallback_honors_an_explicit_budget():
+    """No section markers in the draft -> full-rewrite fallback path."""
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.revise(plan="p", story="no markers here", feedback="f", max_tokens=28000)
+    assert m.call_args.kwargs["max_tokens"] == 28000
