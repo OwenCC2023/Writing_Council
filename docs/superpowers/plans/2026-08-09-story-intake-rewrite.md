@@ -19,7 +19,8 @@
 - When `source_story` is empty, the orchestrator must **omit** `brief`, `rewrite_notes`, and `source_story` from the `PlanningAgent.run` call — not pass `""`. This keeps existing call-args assertions green.
 - Existing prompt text must not change. New behavior arrives as new addenda and new prompt blocks, appended only when the relevant parameter is non-empty.
 - Word-count limits: refuse above 110,000 words; warn (and continue) above 20,000 words in revise mode.
-- Run the full suite with `python -m pytest tests -q` before each commit.
+- Run the full suite with `python -m pytest tests -q` before each commit. From Task 10 on, also `npm test` for the browser-page tests.
+- **Every task ships automated tests, including the CLI, the prompt harness, and the browser page.** This overrides the repo's current state, where those three files have none. Task 10 stands up a vitest + jsdom harness for `static/index.html`.
 
 ---
 
@@ -1679,7 +1680,9 @@ git commit -m "feat: accept an uploaded story at POST /run"
 **Files:**
 - Modify: `consult_the_council.py` (config constants at the top; the `run` call)
 - Modify: `prompt_harness.py` (the question sequence; the `run` call)
-- Test: none — these are thin configuration shells with no logic worth mocking, consistent with the repo, which has no tests for either today.
+- Test: `tests/test_consult_the_council.py` (create), `tests/test_prompt_harness.py` (create)
+
+Both entry points expose a `main()` guarded by `__main__`, so both are testable by patching `WritingCouncil` and `save_as_manuscript` in the module under test. No real run occurs.
 
 **Interfaces:**
 - Consumes: `load_story_text` (Task 1), the new `run` signature (Task 6).
@@ -1744,17 +1747,176 @@ Then make the idea question conditional, since the brief supplies it:
 
 Prompt for target length and audience with no default when `source_story` is set, so blank means "match the original". Pass the four new arguments to `council.run(...)` exactly as in Step 2, and print the brief as in Step 3.
 
-- [ ] **Step 5: Verify the modules still import**
+- [ ] **Step 5: Write the CLI tests**
 
-Run: `python -c "import consult_the_council, prompt_harness"`
-Expected: no output, exit 0. (`consult_the_council` guards its run behind `__main__`, so importing it does not start a council run.)
+```python
+# tests/test_consult_the_council.py
+from unittest.mock import MagicMock, patch
 
-- [ ] **Step 6: Run the full suite and commit**
+import consult_the_council as cli
+
+
+def _result():
+    return {"story": "s", "log": [], "planning_details": "d",
+            "constraint_check": None, "intake_brief": "=== STORY BRIEF ==="}
+
+
+def test_fresh_run_passes_no_source_story(monkeypatch):
+    monkeypatch.setattr(cli, "SOURCE_STORY_PATH", "")
+    with patch.object(cli, "WritingCouncil") as MockCouncil, \
+            patch.object(cli, "save_as_manuscript", return_value="out.docx"):
+        MockCouncil.return_value.run.return_value = _result()
+        cli.main()
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["source_story"] == ""
+    assert kwargs["rewrite_mode"] == ""
+
+
+def test_source_story_path_is_loaded_and_threaded(monkeypatch, tmp_path):
+    story = tmp_path / "sforzato.txt"
+    story.write_text("The fleet dropped out of the lane.", encoding="utf-8")
+    monkeypatch.setattr(cli, "SOURCE_STORY_PATH", str(story))
+    monkeypatch.setattr(cli, "REWRITE_MODE", "revise")
+    monkeypatch.setattr(cli, "REWRITE_NOTES", "darker ending")
+    with patch.object(cli, "WritingCouncil") as MockCouncil, \
+            patch.object(cli, "save_as_manuscript", return_value="out.docx"):
+        MockCouncil.return_value.run.return_value = _result()
+        cli.main()
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["source_story"] == "The fleet dropped out of the lane."
+    assert kwargs["source_filename"] == str(story)
+    assert kwargs["rewrite_mode"] == "revise"
+    assert kwargs["rewrite_notes"] == "darker ending"
+
+
+def test_brief_is_printed_when_present(monkeypatch, capsys, tmp_path):
+    story = tmp_path / "s.txt"
+    story.write_text("prose", encoding="utf-8")
+    monkeypatch.setattr(cli, "SOURCE_STORY_PATH", str(story))
+    with patch.object(cli, "WritingCouncil") as MockCouncil, \
+            patch.object(cli, "save_as_manuscript", return_value="out.docx"):
+        MockCouncil.return_value.run.return_value = _result()
+        cli.main()
+    assert "STORY BRIEF" in capsys.readouterr().out
+```
+
+- [ ] **Step 6: Write the harness tests**
+
+`_ask` and `_ask_multiline` both pass their prompt text to `input()`, so the fake keys off a substring of the prompt rather than a rigid answer order.
+
+```python
+# tests/test_prompt_harness.py
+from unittest.mock import patch
+
+import prompt_harness as harness
+
+
+def _answers(mapping, default=""):
+    """Fake input(): match the prompt against mapping keys by substring."""
+    def _fake(prompt=""):
+        for key, value in mapping.items():
+            if key.lower() in prompt.lower():
+                return value
+        return default
+    return _fake
+
+
+def _result():
+    return {"story": "s", "log": [], "planning_details": "d",
+            "intake_brief": "=== STORY BRIEF ==="}
+
+
+def test_rewrite_answers_are_threaded_into_the_run(tmp_path):
+    story = tmp_path / "sforzato.txt"
+    story.write_text("The fleet dropped out of the lane.", encoding="utf-8")
+    answers = {
+        "story title": "The Sforzato",
+        "author": "Owen",
+        "existing story": str(story),
+        "rewrite mode": "revise",
+        "changed in the rewrite": "darker ending",
+        "target audience": "Adults",
+        "launch": "y",
+    }
+    with patch("builtins.input", _answers(answers)), \
+            patch.object(harness, "WritingCouncil") as MockCouncil, \
+            patch.object(harness, "save_as_manuscript", return_value="out.docx"):
+        MockCouncil.return_value.run.return_value = _result()
+        harness.main()
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["source_story"] == "The fleet dropped out of the lane."
+    assert kwargs["rewrite_mode"] == "revise"
+    assert kwargs["rewrite_notes"] == "darker ending"
+
+
+def test_idea_is_not_asked_when_a_source_story_is_given(tmp_path):
+    story = tmp_path / "s.txt"
+    story.write_text("prose", encoding="utf-8")
+    seen = []
+
+    def _fake(prompt=""):
+        seen.append(prompt)
+        if "existing story" in prompt.lower():
+            return str(story)
+        if "title" in prompt.lower():
+            return "T"
+        if "author" in prompt.lower():
+            return "A"
+        if "audience" in prompt.lower():
+            return "Adults"
+        if "launch" in prompt.lower():
+            return "y"
+        return ""
+
+    with patch("builtins.input", _fake), \
+            patch.object(harness, "WritingCouncil") as MockCouncil, \
+            patch.object(harness, "save_as_manuscript", return_value="out.docx"):
+        MockCouncil.return_value.run.return_value = _result()
+        harness.main()
+    assert not any("story idea" in p.lower() for p in seen)
+    assert MockCouncil.return_value.run.call_args.kwargs["idea"] == ""
+
+
+def test_a_fresh_run_still_asks_for_the_idea():
+    seen = []
+
+    def _fake(prompt=""):
+        seen.append(prompt)
+        if "title" in prompt.lower():
+            return "T"
+        if "author" in prompt.lower():
+            return "A"
+        if "audience" in prompt.lower():
+            return "Adults"
+        if "launch" in prompt.lower():
+            return "y"
+        return ""
+
+    # _ask_multiline reads bare input() lines after printing its prompt; the
+    # blank return above terminates it, so seed the idea through the printed
+    # prompt instead and assert only that it was asked.
+    with patch("builtins.input", _fake), \
+            patch.object(harness, "WritingCouncil") as MockCouncil, \
+            patch.object(harness, "save_as_manuscript", return_value="out.docx"), \
+            patch.object(harness, "_ask_multiline", return_value="a fresh idea"):
+        MockCouncil.return_value.run.return_value = _result()
+        harness.main()
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["idea"] == "a fresh idea"
+    assert kwargs["source_story"] == ""
+```
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `python -m pytest tests/test_consult_the_council.py tests/test_prompt_harness.py -q`
+Expected: PASS (6 tests). If `main()` blocks on an unexpected `input()` call, the fake's default `""` is being consumed by a required field — add that prompt to the mapping rather than reordering the questions.
+
+- [ ] **Step 8: Run the full suite and commit**
 
 Run: `python -m pytest tests -q`
 
 ```bash
-git add consult_the_council.py prompt_harness.py
+git add consult_the_council.py prompt_harness.py tests/test_consult_the_council.py tests/test_prompt_harness.py
 git commit -m "feat: rewrite an existing story from the CLI and the prompt harness"
 ```
 
@@ -1764,7 +1926,10 @@ git commit -m "feat: rewrite an existing story from the CLI and the prompt harne
 
 **Files:**
 - Modify: `static/index.html` (the form around :148-152, the payload builder at :317, the result rendering near :383)
-- Test: manual — this file is a single self-contained page with inline CSS and JS and has no test harness in this repo.
+- Create: `package.json`, `tests/js/index.test.js`, `.gitignore` entry for `node_modules/`
+- Test: vitest + jsdom. This repo has no JS test infrastructure today; Task 10 stands it up. Node 24 / npm 11 are available.
+
+The page is one self-contained file with inline JS, so the tests drive it the way a browser does: load the HTML into jsdom with scripts enabled, dispatch real events, and assert on the DOM and on a stubbed `fetch`. Nothing is exported or refactored for testability.
 
 **Interfaces:**
 - Consumes: the `/run` contract from Task 8.
@@ -1796,18 +1961,161 @@ At the payload builder (`:317`), add:
 
 When the response carries `intake_brief`, render it in the result panel in the same collapsible style the planning details use. Then backfill the title input from `data.title` when it is non-empty — `/save` sends the title from the client, so without this a brief-supplied title never reaches the .docx.
 
-- [ ] **Step 5: Verify by hand**
+- [ ] **Step 5: Stand up the JS test harness**
 
-Start the server (`python server.py`) and check, without running a real council job:
+```bash
+npm init -y
+npm install --save-dev vitest@^2 jsdom@^25
+```
+
+Then set `package.json`'s scripts and remove the generated `main` field:
+
+```json
+{
+  "name": "writing-council-ui-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  }
+}
+```
+
+Add `node_modules/` to `.gitignore` (create the file if the repo has none). Do **not** commit `package-lock.json` conflicts — commit the lockfile as generated.
+
+- [ ] **Step 6: Write the UI tests**
+
+```javascript
+// tests/js/index.test.js
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const HTML = readFileSync(new URL('../../static/index.html', import.meta.url), 'utf-8');
+
+function loadPage() {
+  const dom = new JSDOM(HTML, { runScripts: 'dangerously', url: 'http://localhost:5000' });
+  return dom.window;
+}
+
+/** Attach a story file the way the browser does: set files, dispatch change. */
+async function attachStory(win, name = 'sforzato.txt', body = 'The fleet dropped out.') {
+  const input = win.document.getElementById('story_file');
+  const file = new win.File([body], name, { type: 'text/plain' });
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  input.dispatchEvent(new win.Event('change', { bubbles: true }));
+  // FileReader is async; let its load event settle.
+  await new Promise((resolve) => win.setTimeout(resolve, 0));
+}
+
+describe('story upload controls', () => {
+  it('hides the rewrite controls until a story is attached', () => {
+    const win = loadPage();
+    const controls = win.document.getElementById('rewrite_controls');
+    expect(controls).not.toBeNull();
+    expect(controls.hidden || controls.style.display === 'none').toBe(true);
+  });
+
+  it('reveals the mode radios and notes box once a story is attached', async () => {
+    const win = loadPage();
+    await attachStory(win);
+    const controls = win.document.getElementById('rewrite_controls');
+    expect(controls.hidden || controls.style.display === 'none').toBe(false);
+    expect(win.document.querySelector('input[name="rewrite_mode"]:checked').value)
+      .toBe('reimagine');
+  });
+
+  it('blanks target length and audience when a story is attached', async () => {
+    const win = loadPage();
+    expect(win.document.getElementById('target_length').value).toBe('8,000 words');
+    await attachStory(win);
+    expect(win.document.getElementById('target_length').value).toBe('');
+    expect(win.document.getElementById('target_audience').value).toBe('');
+    expect(win.document.getElementById('target_length').required).toBe(false);
+  });
+
+  it('restores the defaults when the story is removed', async () => {
+    const win = loadPage();
+    await attachStory(win);
+    win.document.getElementById('story_remove').click();
+    expect(win.document.getElementById('target_length').value).toBe('8,000 words');
+    expect(win.document.getElementById('target_audience').value).toBe('Adult sci-fi readers');
+    const controls = win.document.getElementById('rewrite_controls');
+    expect(controls.hidden || controls.style.display === 'none').toBe(true);
+  });
+});
+
+describe('run payload', () => {
+  let win;
+  let sent;
+
+  beforeEach(async () => {
+    win = loadPage();
+    sent = null;
+    win.fetch = vi.fn(async (url, opts) => {
+      sent = { url, body: JSON.parse(opts.body) };
+      return {
+        ok: true,
+        json: async () => ({
+          story: 'a story', log: [], intake_brief: '=== STORY BRIEF ===',
+          rewrite_mode: 'revise', title: 'The Sforzato', target_length: '8432 words',
+        }),
+      };
+    });
+  });
+
+  it('sends story_file, rewrite_mode, and rewrite_notes', async () => {
+    await attachStory(win);
+    win.document.querySelector('input[name="rewrite_mode"][value="revise"]').click();
+    win.document.getElementById('rewrite_notes').value = 'darker ending';
+    win.document.getElementById('run').click();
+    await vi.waitFor(() => expect(sent).not.toBeNull());
+
+    expect(sent.url).toContain('/run');
+    expect(sent.body.story_file.filename).toBe('sforzato.txt');
+    expect(sent.body.story_file.data).toContain('base64,');
+    expect(sent.body.rewrite_mode).toBe('revise');
+    expect(sent.body.rewrite_notes).toBe('darker ending');
+  });
+
+  it('omits story_file on a fresh run', async () => {
+    win.document.getElementById('idea').value = 'a fresh idea';
+    win.document.getElementById('run').click();
+    await vi.waitFor(() => expect(sent).not.toBeNull());
+    expect(sent.body.story_file).toBeFalsy();
+  });
+
+  it('renders the brief and backfills the title from the response', async () => {
+    await attachStory(win);
+    win.document.getElementById('run').click();
+    await vi.waitFor(() =>
+      expect(win.document.getElementById('title').value).toBe('The Sforzato'));
+    expect(win.document.body.textContent).toContain('STORY BRIEF');
+  });
+});
+```
+
+Give the new elements these exact ids, since the tests address them: `story_file`, `story_remove`, `rewrite_controls`, `rewrite_notes`. The radios share `name="rewrite_mode"` with values `reimagine` and `revise`. If the existing run button or title input uses different ids than `run` and `title`, keep the page's ids and update the test file to match — do not rename existing elements.
+
+- [ ] **Step 7: Run the JS tests**
+
+Run: `npm test`
+Expected: PASS (7 tests)
+
+- [ ] **Step 8: Verify by hand**
+
+Start the server (`python server.py`) and confirm the page still works in a real browser — jsdom does not catch layout or CSS mistakes:
 
 1. Attaching a `.txt` reveals the mode radios and the notes box, and blanks the length and audience fields.
 2. The X button clears the file, hides the controls, and restores both defaults.
-3. With DevTools open, submitting sends `story_file`, `rewrite_mode`, and `rewrite_notes` in the payload — you can cancel the request once you have seen it; there is no need to let a billed run proceed.
+3. With DevTools open, submitting sends `story_file`, `rewrite_mode`, and `rewrite_notes` in the payload — cancel the request once you have seen it; there is no need to let a billed run proceed.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Run both suites and commit**
+
+Run: `python -m pytest tests -q` and `npm test`
 
 ```bash
-git add static/index.html
+git add static/index.html package.json package-lock.json .gitignore tests/js/index.test.js
 git commit -m "feat: upload a story to rewrite from the browser UI"
 ```
 
