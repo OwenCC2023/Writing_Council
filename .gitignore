@@ -11,3 +11,6 @@ build/
 .venv/
 venv/
 .env.example
+
+# Node (browser-UI tests)
+node_modules/

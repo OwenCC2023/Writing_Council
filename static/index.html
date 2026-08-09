@@ -67,6 +67,27 @@
   .tab-panel { border: 1px solid var(--border); padding: 0.75rem; background: var(--bg-input); border-radius: 0 3px 3px 3px; }
   input[type="file"] { color: var(--text); }
   .hidden { display: none !important; }
+  [hidden] { display: none !important; }
+  .story-chip {
+    display: inline-flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem;
+    padding: 0.25rem 0.5rem; font-size: 0.85rem; border: 1px solid var(--border);
+    border-radius: 3px; background: var(--bg-input); color: var(--text);
+  }
+  .chip-remove {
+    width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--err-bdr);
+    background: var(--err-bg); color: var(--err-fg); cursor: pointer; font-size: 0.75rem;
+    line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0;
+    font-family: inherit;
+  }
+  .mode-option { display: block; font-weight: normal; margin-top: 0.4rem; font-size: 0.9rem; }
+  .mode-option input { margin-right: 0.4rem; }
+  #intake-brief { margin-bottom: 0.75rem; }
+  #intake-brief summary { cursor: pointer; font-size: 0.9rem; font-weight: bold; }
+  #intake-brief pre {
+    white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; margin: 0.5rem 0 0;
+    padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 3px;
+    background: var(--bg-input); color: var(--text);
+  }
   button[type="submit"] {
     margin-top: 1.5rem; padding: 0.6rem 1.4rem; font-size: 1rem;
     background: var(--btn-run); color: var(--btn-run-fg); border: none; border-radius: 3px;
@@ -136,20 +157,41 @@
   </div>
 
   <form id="council-form" novalidate>
-    <label for="title">Title *</label>
-    <input type="text" id="title" name="title">
+    <label for="title" id="label_title">Title *</label>
+    <input type="text" id="title" name="title" required>
 
-    <label for="author">Author *</label>
-    <input type="text" id="author" name="author">
+    <label for="author" id="label_author">Author *</label>
+    <input type="text" id="author" name="author" required>
 
-    <label for="idea">Idea *</label>
-    <textarea id="idea" name="idea" rows="5"></textarea>
+    <label for="story_file">Rewrite an existing story <span class="optional">(optional)</span></label>
+    <input type="file" id="story_file" accept=".txt,.md,.docx">
+    <div class="story-chip hidden" id="story_chip">
+      <span id="story_name"></span>
+      <button type="button" id="story_remove" class="chip-remove" aria-label="Remove story">&times;</button>
+    </div>
+    <div id="rewrite_controls" hidden>
+      <label>Rewrite mode</label>
+      <label class="mode-option">
+        <input type="radio" name="rewrite_mode" value="reimagine" checked>
+        Reimagine &mdash; a new story on the original&rsquo;s bones
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="rewrite_mode" value="revise">
+        Revise &mdash; edit the original prose
+      </label>
+      <label for="rewrite_notes">Rewrite Notes <span class="optional">(optional)</span></label>
+      <textarea id="rewrite_notes" name="rewrite_notes" rows="3"
+                placeholder="e.g. darker ending · cut the flashback · keep the narrator"></textarea>
+    </div>
 
-    <label for="target_length">Target Length *</label>
-    <input type="text" id="target_length" name="target_length" value="8,000 words">
+    <label for="idea" id="label_idea">Idea *</label>
+    <textarea id="idea" name="idea" rows="5" required></textarea>
 
-    <label for="target_audience">Target Audience *</label>
-    <input type="text" id="target_audience" name="target_audience" value="Adult sci-fi readers">
+    <label for="target_length" id="label_target_length">Target Length *</label>
+    <input type="text" id="target_length" name="target_length" value="8,000 words" required>
+
+    <label for="target_audience" id="label_target_audience">Target Audience *</label>
+    <input type="text" id="target_audience" name="target_audience" value="Adult sci-fi readers" required>
 
     <label for="world_rules">World Rules <span class="optional">(optional)</span></label>
     <textarea id="world_rules" name="world_rules" rows="4"></textarea>
@@ -189,6 +231,10 @@
   <div id="output-section" class="hidden">
     <h2>Output</h2>
     <div id="constraint-check" class="hidden"></div>
+    <details id="intake-brief" class="hidden">
+      <summary>Story brief</summary>
+      <pre id="intake-brief-text"></pre>
+    </details>
     <textarea id="story-output" readonly></textarea>
     <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
     <button type="button" id="download-btn">Download .docx</button>
@@ -279,6 +325,71 @@
     renderThumbs();
   });
 
+  // --- Uploaded story to rewrite (single file, removable before submit) ---
+  const storyInput      = document.getElementById('story_file');
+  const storyChip       = document.getElementById('story_chip');
+  const storyName       = document.getElementById('story_name');
+  const storyRemove     = document.getElementById('story_remove');
+  const rewriteControls = document.getElementById('rewrite_controls');
+  const rewriteNotes    = document.getElementById('rewrite_notes');
+
+  let uploadedStory = null; // {data, filename}
+
+  // Fields whose defaults and required-markers a held story suspends. A blank
+  // target length or audience means "match the original", so the intake brief wins.
+  const STORY_MODE_FIELDS = [
+    ['title',           'Title',           ''],
+    ['author',          'Author',          ''],
+    ['idea',            'Idea',            ''],
+    ['target_length',   'Target Length',   '8,000 words'],
+    ['target_audience', 'Target Audience', 'Adult sci-fi readers'],
+  ];
+  const MATCH_ORIGINAL = 'blank = match the original';
+
+  function setStoryMode(on) {
+    rewriteControls.hidden = !on;
+    storyChip.classList.toggle('hidden', !on);
+    for (const [id, labelText, defaultValue] of STORY_MODE_FIELDS) {
+      const field = document.getElementById(id);
+      const label = document.getElementById('label_' + id);
+      if (on) {
+        field.removeAttribute('required');
+      } else {
+        field.setAttribute('required', '');
+      }
+      if (!defaultValue) {
+        label.textContent = on ? labelText : labelText + ' *';
+        continue;
+      }
+      field.value = on ? '' : defaultValue;
+      field.placeholder = on ? MATCH_ORIGINAL : '';
+      label.innerHTML = on
+        ? labelText + ' <span class="optional">(' + MATCH_ORIGINAL + ')</span>'
+        : labelText + ' *';
+    }
+  }
+
+  storyInput.addEventListener('change', () => {
+    const file = storyInput.files && storyInput.files[0];
+    if (!file) return;
+    readAsDataURL(file)
+      .then(data => {
+        uploadedStory = { data, filename: file.name };
+        storyName.textContent = file.name;
+        setStoryMode(true);
+      })
+      .catch(err => showError(err.message));
+  });
+
+  storyRemove.addEventListener('click', () => {
+    uploadedStory = null;
+    storyInput.value = '';
+    storyName.textContent = '';
+    rewriteNotes.value = '';
+    document.querySelector('input[name="rewrite_mode"][value="reimagine"]').checked = true;
+    setStoryMode(false);
+  });
+
   // --- Image tab switching ---
   tabUpload.addEventListener('click', () => {
     tabUpload.classList.add('active');
@@ -320,6 +431,9 @@
       framework:        document.getElementById('framework').value.trim(),
       style:            document.getElementById('style_field').value.trim(),
       constraint:       document.getElementById('constraint').value.trim(),
+      story_file:       uploadedStory ? { data: uploadedStory.data, filename: uploadedStory.filename } : null,
+      rewrite_mode:     (document.querySelector('input[name="rewrite_mode"]:checked') || {}).value || '',
+      rewrite_notes:    rewriteNotes.value.trim(),
     };
     const uploadActive = !panelUpload.classList.contains('hidden');
     if (uploadActive) {
@@ -349,6 +463,13 @@
     constraintCheck.className = cc.passed ? 'cc-pass' : 'cc-fail';
   }
 
+  const intakeBrief = document.getElementById('intake-brief');
+  const intakeBriefText = document.getElementById('intake-brief-text');
+  function renderIntakeBrief(brief) {
+    intakeBriefText.textContent = brief || '';
+    intakeBrief.classList.toggle('hidden', !brief);
+  }
+
   function submitPayload(payload) {
     errorMsg.classList.add('hidden');
     runBtn.disabled = true;
@@ -366,6 +487,10 @@
         if (data.error) { showError(data.error); return; }
         storyOutput.value = data.story;
         lastPlanningDetails = data.planning_details || '';
+        renderIntakeBrief(data.intake_brief);
+        // /save sends the title from this page, so a brief-supplied title has to
+        // land in the field or it never reaches the .docx.
+        if (data.title) document.getElementById('title').value = data.title;
         renderConstraintCheck(data.constraint_check);
         outputSection.classList.remove('hidden');
         runBtn.disabled = false;
@@ -383,10 +508,14 @@
       ['target_length',   'Target Length'],
       ['target_audience', 'Target Audience'],
     ];
-    for (const [id, label] of REQUIRED) {
-      if (!document.getElementById(id).value.trim()) {
-        showError('"' + label + '" is required.');
-        return;
+    // A held story supplies what these fields would have: the intake brief
+    // resolves the title, length, and audience from the original.
+    if (!uploadedStory) {
+      for (const [id, label] of REQUIRED) {
+        if (!document.getElementById(id).value.trim()) {
+          showError('"' + label + '" is required.');
+          return;
+        }
       }
     }
     const uploadActive = !panelUpload.classList.contains('hidden');
