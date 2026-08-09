@@ -335,11 +335,13 @@
 
   let uploadedStory = null; // {data, filename}
 
-  // Fields whose defaults and required-markers a held story suspends. A blank
-  // target length or audience means "match the original", so the intake brief wins.
+  // Fields a held story resolves, so their defaults and required-markers are
+  // suspended: the title comes back from the intake brief, the story replaces the
+  // idea, and a blank target length or audience means "match the original".
+  // Author is deliberately absent — nothing downstream supplies it, and /save
+  // reads it straight from this field, so it stays required in both modes.
   const STORY_MODE_FIELDS = [
     ['title',           'Title',           ''],
-    ['author',          'Author',          ''],
     ['idea',            'Idea',            ''],
     ['target_length',   'Target Length',   '8,000 words'],
     ['target_audience', 'Target Audience', 'Adult sci-fi readers'],
@@ -508,14 +510,15 @@
       ['target_length',   'Target Length'],
       ['target_audience', 'Target Audience'],
     ];
-    // A held story supplies what these fields would have: the intake brief
-    // resolves the title, length, and audience from the original.
-    if (!uploadedStory) {
-      for (const [id, label] of REQUIRED) {
-        if (!document.getElementById(id).value.trim()) {
-          showError('"' + label + '" is required.');
-          return;
-        }
+    // A held story supplies what most of these fields would have: the intake brief
+    // resolves the title, and the story stands in for the idea, length, and
+    // audience. Author is not resolved anywhere, so it stays required.
+    const exempt = uploadedStory ? STORY_MODE_FIELDS.map(([id]) => id) : [];
+    for (const [id, label] of REQUIRED) {
+      if (exempt.includes(id)) continue;
+      if (!document.getElementById(id).value.trim()) {
+        showError('"' + label + '" is required.');
+        return;
       }
     }
     const uploadActive = !panelUpload.classList.contains('hidden');

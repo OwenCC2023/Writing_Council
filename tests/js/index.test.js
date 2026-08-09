@@ -86,6 +86,7 @@ describe('run payload', () => {
 
   it('sends story_file, rewrite_mode, and rewrite_notes', async () => {
     await attachStory(win);
+    win.document.getElementById('author').value = 'A. Writer';
     win.document.querySelector('input[name="rewrite_mode"][value="revise"]').click();
     win.document.getElementById('rewrite_notes').value = 'darker ending';
     win.document.getElementById('run-btn').click();
@@ -108,8 +109,21 @@ describe('run payload', () => {
     expect(sent.body.rewrite_notes).toBe('');
   });
 
+  it('still requires the author when a story is attached', async () => {
+    await attachStory(win);
+    win.document.getElementById('author').value = '';
+    win.document.getElementById('run-btn').click();
+    await new Promise((resolve) => win.setTimeout(resolve, 50));
+    expect(win.fetch).not.toHaveBeenCalled();
+    expect(sent).toBeNull();
+    const err = win.document.getElementById('error-msg');
+    expect(err.classList.contains('hidden')).toBe(false);
+    expect(err.textContent).toBe('"Author" is required.');
+  });
+
   it('renders the brief and backfills the title from the response', async () => {
     await attachStory(win);
+    win.document.getElementById('author').value = 'A. Writer';
     win.document.getElementById('run-btn').click();
     await vi.waitFor(() =>
       expect(win.document.getElementById('title').value).toBe('The Sforzato'));
