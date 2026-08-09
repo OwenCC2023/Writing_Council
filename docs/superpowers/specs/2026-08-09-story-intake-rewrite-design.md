@@ -26,7 +26,8 @@ An empty `source_story` leaves the existing pipeline byte-for-byte unchanged.
 `load_story_text(path) -> str`
 
 - `.txt` / `.md`: read as UTF-8.
-- `.docx`: python-docx (new dependency); paragraphs joined with a blank line between.
+- `.docx`: python-docx (already in `requirements.txt`, used by `document_writer`);
+  paragraphs joined with a blank line between.
 - Raises on unsupported extension, unreadable file, or empty text.
 - Raises above 110,000 words, reporting the count (see Error handling).
 
@@ -92,10 +93,26 @@ markers exist.
 
 ### `agents/planning_agent.py` (changed)
 
-`PlanningAgent.run` gains optional `source_story: str = ""` and `plan_existing: bool = False`.
-When set, a prompt addendum instructs it to plan the story that exists rather than invent
-one. Output format is unchanged: `<<<WORLD_CLASS>>>` tag, `STORY ENGINE` block, per-section
+`PlanningAgent.run` gains three optional parameters:
+
+- `brief: str = ""` — the full `=== STORY BRIEF ===` block, injected as its own labelled
+  section of the user prompt. **Both modes use this.** Mapping only SYNOPSIS into `idea`
+  would strand CHARACTERS, PLOT, INTENT, and GENRE — the planner would reinvent exactly
+  what intake was called to extract. The brief goes through whole; the merge governs only
+  the craft params (length, audience, style, title, world_rules, framework).
+- `rewrite_notes: str = ""` — rendered as its own `REWRITE DIRECTIVE:` block. Not folded
+  into `framework`, which already carries the structure text.
+- `source_story: str = ""` plus `plan_existing: bool = False` — revise mode only. A prompt
+  addendum instructs the planner to plan the story that exists rather than invent one.
+
+Output format is unchanged: `<<<WORLD_CLASS>>>` tag, `STORY ENGINE` block, per-section
 "How it escalates". Everything downstream is untouched.
+
+The `plan_existing` addendum must **override the section-chunking rule in
+`CLASSIFY_ADDENDUM`**, which tells the planner to chunk into more, smaller sections when
+NON-EARTH. On a revise run the section count has to come from the draft's actual scene
+structure — otherwise the sectionizer is asked for more anchors than there are scenes and
+the fallback fires on every run.
 
 ### `orchestrator.py` (changed)
 
@@ -137,6 +154,9 @@ Everything revise mode needs before the loops, kept out of `_run_inner`:
 3. If `non_earth`: `WorldBuilderAgent.run(idea=<brief SYNOPSIS>, plan=plan, world_rules=...)`
    → canon and bible. `revise_with_world_bible` is **not** called (see below).
 4. `sectionize(plan, source_story)` → the draft with `<<<SECTION N>>>` markers.
+5. Build `planning_details` — the same input echo the initial branch builds, plus
+   `rewrite_mode`, `rewrite_notes`, and the source word count. Without this a revise run
+   returns `planning_details=""` and the log loses the run's inputs.
 
 `run()` then calls `_run_inner(seeded=True, plan=..., story=..., non_earth=..., ...)` and
 the outer loop proceeds exactly as it does today.
@@ -145,11 +165,14 @@ the outer loop proceeds exactly as it does today.
 
 ```
 upload -> load_story_text -> IntakeAgent -> brief
-       -> merge: a non-empty user field wins; otherwise the brief fills it
+       -> the whole brief is passed to PlanningAgent as `brief=` in both modes
+       -> merge, for the craft params only: a non-empty user field wins,
+          otherwise the brief fills it
           idea          <- SYNOPSIS
           world_rules   <- WORLD RULES
           framework     <- STORYLINE/STRUCTURE
           target_length <- LENGTH
+          target_audience, style, constraint  <- user only; no brief fallback
           title         <- brief TITLE, else the uploaded filename stem
   reimagine -> _run_inner(idea=...)  — today's path; planner never sees the original prose
   revise    -> _run_revise_setup(...) -> plan, marked_story, non_earth, canon, bible
@@ -159,7 +182,21 @@ result += {"intake_brief": ..., "rewrite_mode": ...}
 
 Intake and the merge both happen inside `WritingCouncil.run`, before `_run_inner` is
 called, so the CLI, server, and UI all get the behavior from one place.
-`rewrite_notes` goes to both the intake agent and the planner as an explicit directive.
+`rewrite_notes` goes to both the intake agent and the planner.
+
+### Blank means blank
+
+The merge only works if an untouched field arrives empty. Today it never does:
+`static/index.html:148-152` hardcodes `value="8,000 words"` and
+`value="Adult sci-fi readers"` and marks both required, and `server.py` re-defaults them
+on top. Left as-is, every upload silently retargets to 8,000 words and the brief's LENGTH
+can never win.
+
+- **UI**: when a story file is attached, clear those two inputs, drop the required marker,
+  and relabel them "(blank = match the original)".
+- **Server**: skip the `data.get(..., <default>)` fallbacks when `source_story` is present —
+  pass `""` through and let the merge decide.
+- **CLI and prompt harness**: same rule; their defaults apply only to fresh runs.
 
 ## Entry points
 
@@ -221,6 +258,11 @@ All tests mock LLM calls (`unittest.mock.patch`); no real API calls, per repo co
   is rejected; the glyph and blank-line fallbacks work; text before anchor 1 is dropped.
 - Word-count limits: 110k refuses; a 25k-word revise run warns but proceeds.
 - Invalid `rewrite_mode` raises; empty mode with a `source_story` runs reimagine.
+- The planner receives the full brief in both modes — assert CHARACTERS and PLOT text
+  reaches `PlanningAgent.run`, not just the synopsis.
+- Blank-means-blank: a `/run` payload with `source_story` and no `target_length` reaches
+  the planner with the brief's LENGTH, not `"8,000 words"`.
+- A revise run returns a non-empty `planning_details`.
 
 ## Model recommendation per part
 
