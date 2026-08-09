@@ -10,6 +10,7 @@ from .world_builder_agent import WorldBuilderAgent
 from .strangeness_agent import StrangenessReviewerAgent
 from .sensory_agent import SensoryQuotaAgent
 from .engine_agent import EngineReviewerAgent
+from .intake_agent import IntakeAgent, parse_brief, BRIEF_FIELDS
 
 __all__ = [
     "PlanningAgent",
@@ -24,4 +25,7 @@ __all__ = [
     "StrangenessReviewerAgent",
     "SensoryQuotaAgent",
     "EngineReviewerAgent",
+    "IntakeAgent",
+    "parse_brief",
+    "BRIEF_FIELDS",
 ]
