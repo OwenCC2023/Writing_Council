@@ -19,6 +19,7 @@ from agents import (
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL, max_tokens_for
 from agents.intake_agent import IntakeAgent, parse_brief
+from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
 from story_intake import word_count
@@ -74,6 +75,7 @@ class WritingCouncil:
         self.sensory = SensoryQuotaAgent()
         self.engine = EngineReviewerAgent()
         self.intake = IntakeAgent()
+        self.sectionizer = SectionizerAgent()
         self._log = []
         self._log_file = None
 
@@ -135,6 +137,20 @@ class WritingCouncil:
                 translates it into rules and the writer honors it on every pass;
                 countable constraints are also verified deterministically and
                 surfaced as ``constraint_check`` on the result.
+            source_story: Optional full text of an uploaded story to rewrite. When
+                provided, IntakeAgent digests it into a brief that fills in any
+                unset craft params, and the rewrite is routed per rewrite_mode.
+            rewrite_mode: ``"reimagine"`` (default when source_story is set) plans
+                and writes a new story from the intake brief, or ``"revise"``,
+                which seeds the inner loop with the uploaded draft itself and
+                runs it through the review/revise loops in place of an initial
+                write. Ignored when source_story is empty.
+            rewrite_notes: Optional free-text guidance for the rewrite (e.g. "make
+                the ending darker"), passed to IntakeAgent and, on a revise run,
+                to the planner alongside the source story.
+            source_filename: Optional filename of the uploaded source_story, used
+                only as a title fallback (its stem) when neither the user nor the
+                intake brief supplies one.
         """
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
@@ -182,22 +198,39 @@ class WritingCouncil:
         else:
             mode = ""
 
-        # Inner — generates plan and initial story
-        print("[outer] Starting inner loop (initial write)...")
-        plan, story, non_earth, canon_sheet, world_bible, planning_details = self._run_inner(
-            idea=idea,
-            target_length=target_length,
-            target_audience=target_audience,
-            world_rules=world_rules,
-            framework=framework,
-            style=style,
-            image=image,
-            title=title,
-            constraint=constraint,
-            brief=brief_text,
-            rewrite_notes=rewrite_notes,
-            label="outer.inner",
-        )
+        # Inner — generates plan and initial story (or, in revise mode, plans
+        # and marks the existing draft, seeding the inner loop instead).
+        if mode == "revise":
+            print("[outer] Starting inner loop (revise: seeded with the uploaded draft)...")
+            plan, story, non_earth, canon_sheet, world_bible, planning_details = \
+                self._run_revise_setup(
+                    brief=brief_text, source_story=source_story,
+                    rewrite_notes=rewrite_notes, target_length=target_length,
+                    target_audience=target_audience, world_rules=world_rules,
+                    framework=framework, style=style, title=title,
+                    constraint=constraint, idea=idea)
+            plan, story, non_earth, canon_sheet, world_bible, _ = self._run_inner(
+                seeded=True, plan=plan, story=story, non_earth=non_earth,
+                canon_sheet=canon_sheet, world_bible=world_bible,
+                target_length=target_length, target_audience=target_audience,
+                constraint=constraint, label="outer.inner")
+        else:
+            print("[outer] Starting inner loop (initial write)...")
+            plan, story, non_earth, canon_sheet, world_bible, planning_details = \
+                self._run_inner(
+                    idea=idea,
+                    target_length=target_length,
+                    target_audience=target_audience,
+                    world_rules=world_rules,
+                    framework=framework,
+                    style=style,
+                    image=image,
+                    title=title,
+                    constraint=constraint,
+                    brief=brief_text,
+                    rewrite_notes=rewrite_notes,
+                    label="outer.inner",
+                )
 
         # Middle
         print("[outer] Starting middle loop...")
@@ -223,6 +256,70 @@ class WritingCouncil:
                 "title": title,
                 "target_length": target_length,
                 "log": list(self._log)}
+
+    def _count_plan_sections(self, plan: str) -> int:
+        """How many numbered sections the plan declares. At least 1."""
+        nums = re.findall(r'^\s*(?:SECTION\s+)?(\d+)[.:)]', plan, re.MULTILINE | re.IGNORECASE)
+        return max(1, len(set(nums)))
+
+    def _run_revise_setup(self, brief: str, source_story: str, rewrite_notes: str,
+                          target_length: str, target_audience: str, world_rules: str,
+                          framework: str, style: str, title: str, constraint: str,
+                          idea: str, label: str = "revise") -> tuple:
+        """Plan the existing story, classify it, world-build, and mark sections.
+
+        Returns (plan, marked_story, non_earth, canon_sheet, world_bible,
+        planning_details). Kept out of _run_inner, whose initial branch owns
+        classification for fresh runs and would reset these values.
+        """
+        input_text = (
+            f"title: {title or '(none)'}\n"
+            f"rewrite_mode: revise\n"
+            f"rewrite_notes: {rewrite_notes or '(none)'}\n"
+            f"source_words: {word_count(source_story)}\n"
+            f"idea: {idea}\ntarget_length: {target_length}\n"
+            f"target_audience: {target_audience}\n"
+            f"world_rules: {world_rules or '(none)'}\n"
+            f"framework: {framework or '(none)'}\n"
+            f"style: {style or '(none)'}\n"
+            f"constraint: {constraint or '(none)'}"
+        )
+
+        print(f"[{label}] Running PlanningAgent over the existing story...")
+        self._log_start(f"{label}.plan", "PlanningAgent", input_text)
+        result = self.planner.run(
+            idea=idea, target_length=target_length, target_audience=target_audience,
+            world_rules=world_rules, framework=framework, style=style,
+            model=INITIAL_DRAFT_MODEL, title=title, constraint=constraint,
+            brief=brief, rewrite_notes=rewrite_notes,
+            source_story=source_story, plan_existing=True,
+        )
+        self._log_end(result, step=f"{label}.plan")
+        non_earth, plan = self._parse_world_class(result["output"])
+
+        canon_sheet, world_bible = "", ""
+        if non_earth:
+            print(f"[{label}] NON-EARTH world — running WorldBuilder...")
+            self._log_start(f"{label}.world_builder", "WorldBuilderAgent",
+                            f"idea:\n{idea}\n\nplan:\n{plan}")
+            wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules)
+            self._log_end(wb, step=f"{label}.world_builder")
+            canon_sheet, world_bible = wb["canon_sheet"], wb["world_bible"]
+            # revise_with_world_bible is deliberately NOT called: it rewrites the
+            # plan to exploit the world, pulling it away from the draft it must
+            # describe.
+
+        section_count = self._count_plan_sections(plan)
+        print(f"[{label}] Marking {section_count} sections in the original draft...")
+        self._log_start(f"{label}.sectionize", "SectionizerAgent",
+                        f"section_count: {section_count}")
+        anchors = self.sectionizer.run(plan=plan, story=source_story,
+                                       section_count=section_count)
+        self._log_end({"agent": "SectionizerAgent", "output": "\n".join(anchors)},
+                      step=f"{label}.sectionize")
+        marked_story = sectionize(source_story, anchors, section_count)
+
+        return plan, marked_story, non_earth, canon_sheet, world_bible, input_text
 
     # ------------------------------------------------------------------
     # Inner loop: 1 → 2 → (4∥3) → 1(plan_revision) → 2
@@ -255,13 +352,20 @@ class WritingCouncil:
         world_bible: str = "",
         brief: str = "",
         rewrite_notes: str = "",
+        seeded: bool = False,
     ) -> tuple:
         """Returns (plan, story, non_earth, canon_sheet, world_bible, planning_details)."""
 
         write_max_tokens = max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS)
 
         planning_details = ""
-        if idea is not None:
+        revised_sections = None
+
+        if seeded:
+            # Revise mode: plan and marked draft come from _run_revise_setup.
+            # No plan call, no write call — start at the checker fan-out.
+            print(f"[{label}] Seeded with an existing draft; skipping the initial write.")
+        elif idea is not None:
             non_earth, canon_sheet, world_bible = False, "", ""
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
@@ -325,6 +429,7 @@ class WritingCouncil:
                 max_tokens=write_max_tokens)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
+            revised_sections = write_result.get("revised_sections")
 
         else:
             # ---- Called from Middle: 1 synthesizes middle feedback, 2 revises ----
@@ -356,10 +461,10 @@ class WritingCouncil:
                 max_tokens=write_max_tokens)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
+            revised_sections = write_result.get("revised_sections")
 
         # ---- 4 and 3: parallel consistency and AI failure check ----
         # If the writer only rewrote specific sections, pass only those to the checkers.
-        revised_sections = write_result.get("revised_sections")
         check_text = (
             self._extract_sections_text(story, revised_sections)
             if revised_sections is not None
