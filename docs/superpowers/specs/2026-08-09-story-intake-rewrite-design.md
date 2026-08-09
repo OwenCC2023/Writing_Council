@@ -75,7 +75,11 @@ SYNOPSIS:            <premise paragraph; feeds idea>
 remains the sole authority that `_parse_world_class` reads, so `non_earth` keeps one
 source of truth and `rewrite_notes` like "move it to a gas giant" flows through naturally.
 
-### `sectionizer.py` (new) — revise mode only
+### `agents/sectionizer_agent.py` (new) — revise mode only
+
+Filed under `agents/` rather than at the repo root, following the "one class per agent"
+convention. The pure marker-insertion helpers live in the same module as the agent that
+feeds them.
 
 Runtime model: `FEEDBACK_MODEL` (Haiku 4.5). A single call returns *anchors* (the first ~8
 words of each section start). Python locates each anchor in the original and inserts
@@ -140,17 +144,19 @@ client, so when the brief supplied it the browser has no other way to learn it.
 
 ### Writer `max_tokens` derived from `target_length` (changed, applies to every run)
 
-The flat 8192 default (`agents/base_agent.py:52`) is roughly 6,000 words. Today's 8k-word
-runs only fit because the writer emits changed sections only; a full-draft emission at that
-target already sits over the ceiling, and a 20k-word upload blows through it and truncates
-mid-draft. Scoping the fix to `source_story` would leave the same latent bug on long fresh
-runs, because the risk comes from output size, not from where the input came from.
+Correction from the code: writer calls do **not** use the 8192 default. They already pass
+`INITIAL_WRITE_MAX_TOKENS = 16000` (`agents/writer_agent.py:8`), about 10,000 words. The
+8192 default applies to reviewers and the planner. So the ceiling is higher than the fourth
+duck pass assumed, and a normal 8k-word run is in no danger — but a 20k-word upload still
+overruns it and truncates mid-draft.
 
-So: a helper parses a word count out of `target_length` and returns
-`clamp(words * 1.4, 8192, 32000)` tokens, passed to writer calls. Unparseable or absent
-`target_length` → 8192, exactly today's value. This is a ceiling raise only — no run can
-emit less than it does now, and prompt text is untouched, so the prompt-string regression
-tests are unaffected.
+A helper `max_tokens_for(target_length, floor)` parses a word count out of `target_length`
+and returns `clamp(words * 1.4, floor, 32000)`. Writer calls pass
+`floor=INITIAL_WRITE_MAX_TOKENS`. Unparseable or absent `target_length` → the floor.
+
+This is a ceiling raise only, and for every target at or below ~11,400 words it computes
+16000 — byte-for-byte today's behavior. Prompt text is untouched, so the prompt-string
+regression tests are unaffected.
 
 ### `_run_inner` gains a seeded branch (changed)
 
@@ -322,7 +328,7 @@ All tests mock LLM calls (`unittest.mock.patch`); no real API calls, per repo co
 | --- | --- |
 | `story_intake.py` + tests | Sonnet 5 |
 | `IntakeAgent` prompt, `plan_existing` addendum | Opus 5 (prompt text is the product) |
-| `sectionizer.py` | Sonnet 5 |
+| `agents/sectionizer_agent.py` | Sonnet 5 |
 | Orchestrator wiring (`_run_revise_setup`, seeded `_run_inner`) | Opus 5 |
 | Server, CLI, prompt harness, browser UI | Sonnet 5 |
 
