@@ -124,7 +124,14 @@ the fallback fires on every run.
   raises `ValueError` before an API call.
 - `rewrite_notes: str = ""` — free-text rewrite directive.
 
-Returns `intake_brief` and `rewrite_mode` alongside the existing keys.
+Returns `intake_brief`, `rewrite_mode`, and the **resolved** `title` and `target_length`
+alongside the existing keys. The resolved values matter: `/save` takes the title from the
+client, so when the brief supplied it the browser has no other way to learn it.
+
+Writer calls raise `max_tokens` above the 8192 default (`agents/base_agent.py:52`) when
+`source_story` is set. 8192 tokens is roughly 6,000 words; the council's usual 8k-word
+target only fits because the writer emits changed sections only. A 20k-word upload makes a
+multi-section revision overrun that and truncate mid-draft.
 
 ### `_run_inner` gains a seeded branch (changed)
 
@@ -177,7 +184,7 @@ upload -> load_story_text -> IntakeAgent -> brief
   reimagine -> _run_inner(idea=...)  — today's path; planner never sees the original prose
   revise    -> _run_revise_setup(...) -> plan, marked_story, non_earth, canon, bible
             -> _run_inner(seeded=True, plan=..., story=..., non_earth=...)
-result += {"intake_brief": ..., "rewrite_mode": ...}
+result += {"intake_brief": ..., "rewrite_mode": ..., "title": ..., "target_length": ...}
 ```
 
 Intake and the merge both happen inside `WritingCouncil.run`, before `_run_inner` is
@@ -201,8 +208,12 @@ can never win.
 ## Entry points
 
 - **`server.py` `POST /run`** — accepts `story_file: {data, filename}` (base64, written to a
-  temp file and deleted after the run, matching the image handling) or `story_text`, plus
-  `rewrite_mode` and `rewrite_notes`. Existing fields are unchanged.
+  temp file, matching the image handling) or `story_text`, plus `rewrite_mode` and
+  `rewrite_notes`. Existing fields are unchanged. Two things do **not** come for free:
+  - The `finally` block only iterates `image_paths`. The story temp file has to join it —
+    use one shared `temp_paths` list — or it leaks on every upload.
+  - The response is an explicit allowlist dict, not a passthrough. `intake_brief`,
+    `rewrite_mode`, `title`, and `target_length` must be added to it by hand.
 - **`consult_the_council.py`** — `SOURCE_STORY_PATH`, `REWRITE_MODE`, `REWRITE_NOTES`
   inline constants beside `IDEA_PATH`. Prints the brief.
 - **`prompt_harness.py`** — the interactive terminal harness asks the same three as
@@ -210,7 +221,9 @@ can never win.
   When a path is given the harness stops asking for the idea, since the brief supplies it.
 - **`static/index.html`** — file input (`.txt`/`.md`/`.docx`) with a filename chip and a
   remove button, a two-way mode radio (Reimagine / Revise), and a `rewrite_notes` textarea.
-  All hidden until a file is attached. The brief renders in the result panel.
+  All hidden until a file is attached. The brief renders in the result panel. The title
+  input is backfilled from the response's resolved `title` before save is offered, since
+  `/save` sends the title from the client.
 
 ## Interaction with existing paths
 
@@ -223,6 +236,10 @@ can never win.
   but never on a write. That saves one Opus write on pass one only; every later pass costs
   what it does today, and on `non_earth` the writer is Opus throughout regardless.
 - `constraint` is unchanged; `constraints.check_constraint` still runs on the final output.
+- **Logging**: every step in this pipeline writes to `logs/run_<ts>.log` through
+  `_log_start`/`_log_end`. The new steps do too — `outer.intake` (logging the brief in full)
+  and `outer.sectionize` (logging the anchors). Neither logs the story text; it is already
+  the run's largest input.
 
 ## Error handling
 
@@ -244,7 +261,12 @@ can never win.
 
 All tests mock LLM calls (`unittest.mock.patch`); no real API calls, per repo convention.
 
-- `load_story_text`: txt, md, a `document_writer` .docx round-trip, empty file, bad extension.
+- `load_story_text`: txt, md, empty file, bad extension, and a `document_writer` .docx
+  round-trip — which asserts the manuscript front matter **is** present in the output, since
+  stripping is the intake prompt's and the sectionizer's job, not this function's.
+- `/run` with a `story_file`: the temp file is deleted in `finally`, and the response
+  carries `intake_brief`, `rewrite_mode`, `title`, and `target_length`.
+- Writer `max_tokens` is raised when `source_story` is set, and untouched when it isn't.
 - Brief parsing: complete block and a block with missing fields.
 - Merge precedence: a user value wins; a blank falls back to the brief.
 - `orchestrator.run` with `source_story=""` is unchanged — assert the planner is called with
