@@ -108,6 +108,23 @@ otherwise would, so the writer holds less world-state per section. Per-section w
 must still sum to the target length.\
 """
 
+PLAN_EXISTING_ADDENDUM = """\
+
+This plan is for a story that ALREADY EXISTS. Its full text is provided below. You are not \
+inventing a story — you are writing the plan this story is built on, section by section, \
+so that reviewers can hold it to its own intentions. Describe what is there. Name the \
+STORY ENGINE the existing story actually runs on, not the one it should have run on.
+
+Section numbering comes from the DRAFT'S OWN SCENE STRUCTURE — one planned section per \
+scene or movement that is really in the text, in the order it appears. This OVERRIDES the \
+instruction above to break a NON-EARTH world into more, smaller sections: a plan whose \
+section count does not match the draft's scene structure cannot be mapped onto it.
+
+Still classify the world and still emit the WORLD_CLASS tag as your first line — the \
+classification describes the world of the story as it stands, plus any change the rewrite \
+directive calls for.\
+"""
+
 IMAGE_PROMPT_ADDENDUM = """\
 
 One or more images have been provided as part of the initial prompt. Treat them as \
@@ -270,6 +287,10 @@ class PlanningAgent(BaseAgent):
         model: str = None,
         title: str = "",
         constraint: str = "",
+        brief: str = "",
+        rewrite_notes: str = "",
+        source_story: str = "",
+        plan_existing: bool = False,
     ) -> dict:
         user_prompt = ""
         if title:
@@ -283,9 +304,20 @@ class PlanningAgent(BaseAgent):
             user_prompt += f"\n\nPROSE STYLE: {style}"
         if constraint:
             user_prompt += f"\n\nHARD CONSTRAINT: {constraint}"
+        if brief:
+            user_prompt += f"\n\nSTORY BRIEF (extracted from the original):\n{brief}"
+        if rewrite_notes:
+            user_prompt += (
+                "\n\nREWRITE DIRECTIVE (what the user wants changed; this outranks "
+                f"TARGET LENGTH where the two conflict):\n{rewrite_notes}"
+            )
+        if source_story:
+            user_prompt += f"\n\nORIGINAL STORY TEXT:\n{source_story}"
         user_prompt += "\n\nProduce the full section-by-section plan."
 
-        system_prompt = SYSTEM_PROMPT + CLASSIFY_ADDENDUM + (IMAGE_PROMPT_ADDENDUM if image else "")
+        system_prompt = (SYSTEM_PROMPT + CLASSIFY_ADDENDUM
+                         + (PLAN_EXISTING_ADDENDUM if plan_existing else "")
+                         + (IMAGE_PROMPT_ADDENDUM if image else ""))
 
         if image:
             output = self._call_claude_with_image(system_prompt, user_prompt, image, model=model)

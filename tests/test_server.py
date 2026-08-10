@@ -1,4 +1,6 @@
+import base64
 import json
+import os
 import pytest
 from unittest.mock import patch
 
@@ -170,3 +172,130 @@ def test_save_returns_docx_bytes(client):
     cd = resp.headers.get("Content-Disposition", "")
     assert "attachment" in cd
     assert "My" in cd  # filename contains title
+
+
+def _b64(text: str) -> str:
+    return "data:text/plain;base64," + base64.b64encode(text.encode()).decode()
+
+
+def test_run_accepts_story_text_and_returns_the_brief(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {
+            "story": "s", "log": [], "intake_brief": "=== STORY BRIEF ===",
+            "rewrite_mode": "reimagine", "title": "The Sforzato",
+            "target_length": "8432 words",
+        }
+        resp = client.post("/run", data=json.dumps({
+            "story_text": "The fleet dropped out of the lane.",
+            "rewrite_mode": "reimagine",
+            "rewrite_notes": "darker ending",
+        }), content_type="application/json")
+    data = json.loads(resp.data)
+    assert data["intake_brief"] == "=== STORY BRIEF ==="
+    assert data["rewrite_mode"] == "reimagine"
+    assert data["title"] == "The Sforzato"
+    assert data["target_length"] == "8432 words"
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["source_story"] == "The fleet dropped out of the lane."
+    assert kwargs["rewrite_notes"] == "darker ending"
+
+
+def test_run_accepts_an_uploaded_story_file_and_deletes_the_temp(client):
+    seen = {}
+
+    def _fake_loader(path):
+        seen["path"] = path
+        return "loaded prose"
+
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "s", "log": []}
+        with patch("server.load_story_text", side_effect=_fake_loader):
+            resp = client.post("/run", data=json.dumps({
+                "story_file": {"data": _b64("prose here"), "filename": "sforzato.txt"},
+            }), content_type="application/json")
+    assert resp.status_code == 200
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["source_story"] == "loaded prose"
+    assert kwargs["source_filename"] == "sforzato.txt"
+    assert not os.path.exists(seen["path"])  # cleaned up in finally
+
+
+def test_an_uploaded_file_wins_over_pasted_text(client):
+    """Both supplied: the file is the deliberate act, so it takes the field."""
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "s", "log": []}
+        with patch("server.load_story_text", return_value="from the file"):
+            resp = client.post("/run", data=json.dumps({
+                "story_text": "pasted prose",
+                "story_file": {"data": _b64("prose here"), "filename": "s.txt"},
+            }), content_type="application/json")
+    assert resp.status_code == 200
+    assert MockCouncil.return_value.run.call_args.kwargs["source_story"] == "from the file"
+
+
+def test_an_unnamed_story_upload_lands_on_a_readable_suffix(client):
+    """Without a story-specific default the temp file got .png and was rejected."""
+    seen = {}
+
+    def _fake_loader(path):
+        seen["path"] = path
+        return "loaded prose"
+
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "s", "log": []}
+        with patch("server.load_story_text", side_effect=_fake_loader):
+            resp = client.post("/run", data=json.dumps({
+                "story_file": {"data": _b64("prose here"), "filename": ""},
+            }), content_type="application/json")
+    assert resp.status_code == 200
+    assert seen["path"].endswith(".txt")
+
+
+def test_a_story_file_without_data_is_a_400(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        resp = client.post("/run", data=json.dumps({
+            "story_file": {"filename": "sforzato.txt"},
+        }), content_type="application/json")
+    assert resp.status_code == 400
+    assert "data" in json.loads(resp.data)["error"]
+    MockCouncil.return_value.run.assert_not_called()
+
+
+def test_an_unreadable_story_upload_is_a_400_carrying_the_real_message(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        resp = client.post("/run", data=json.dumps({
+            "story_file": {"data": _b64("%PDF-1.4"), "filename": "story.pdf"},
+        }), content_type="application/json")
+    assert resp.status_code == 400
+    assert "Unsupported story file type" in json.loads(resp.data)["error"]
+    MockCouncil.return_value.run.assert_not_called()
+
+
+def test_an_empty_story_upload_is_a_400(client):
+    with patch("server.WritingCouncil"):
+        resp = client.post("/run", data=json.dumps({
+            "story_file": {"data": _b64("   "), "filename": "story.txt"},
+        }), content_type="application/json")
+    assert resp.status_code == 400
+    assert "empty" in json.loads(resp.data)["error"]
+
+
+def test_run_skips_its_defaults_when_a_story_is_supplied(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "s", "log": []}
+        client.post("/run", data=json.dumps({
+            "story_text": "prose",
+        }), content_type="application/json")
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["target_length"] == ""
+    assert kwargs["target_audience"] == ""
+
+
+def test_run_keeps_its_defaults_for_a_fresh_run(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "s", "log": []}
+        client.post("/run", data=json.dumps({"idea": "fresh"}),
+                    content_type="application/json")
+    kwargs = MockCouncil.return_value.run.call_args.kwargs
+    assert kwargs["target_length"] == "8,000 words"
+    assert kwargs["target_audience"] == "Adult sci-fi readers"

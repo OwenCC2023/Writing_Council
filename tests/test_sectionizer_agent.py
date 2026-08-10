@@ -1,0 +1,157 @@
+import re
+from unittest.mock import patch
+
+from agents.sectionizer_agent import (
+    SectionizerAgent, insert_markers, fallback_sectionize, sectionize,
+    _number_groups, MAX_DROPPED_WORDS,
+)
+
+_STORY = (
+    "Owen Cardwell-Copenhefer\napprox. 900 words\n\n"
+    "The fleet dropped out of the lane.\nLigatto watched the plot.\n\n"
+    "By morning the line had bent.\nNobody called it a retreat.\n\n"
+    "At Frankfurt the timing simply failed him."
+)
+
+
+def test_insert_markers_places_markers_and_drops_front_matter():
+    out = insert_markers(_STORY, ["The fleet dropped out", "By morning the line",
+                                  "At Frankfurt the timing"])
+    assert out.startswith("<<<SECTION 1>>>\nThe fleet dropped out")
+    assert "<<<SECTION 2>>>\nBy morning the line" in out
+    assert "<<<SECTION 3>>>\nAt Frankfurt the timing" in out
+    assert "Owen Cardwell-Copenhefer" not in out
+    assert "approx. 900 words" not in out
+
+
+def test_insert_markers_does_not_alter_the_prose():
+    out = insert_markers(_STORY, ["The fleet dropped out", "At Frankfurt the timing"])
+    assert "Ligatto watched the plot." in out
+    assert "Nobody called it a retreat." in out
+
+
+def test_insert_markers_rejects_a_missing_anchor():
+    assert insert_markers(_STORY, ["The fleet dropped out", "no such text here"]) is None
+
+
+def test_insert_markers_rejects_a_duplicate_anchor():
+    story = "Alpha beta.\n\nAlpha beta.\n\nGamma delta."
+    assert insert_markers(story, ["Alpha beta", "Gamma delta"]) is None
+
+
+def test_insert_markers_rejects_out_of_order_anchors():
+    assert insert_markers(_STORY, ["At Frankfurt the timing", "The fleet dropped out"]) is None
+
+
+def test_fallback_sectionize_splits_on_glyph_breaks():
+    story = "One.\n\n***\n\nTwo.\n\n***\n\nThree."
+    out = fallback_sectionize(story, 3)
+    assert out.count("<<<SECTION") == 3
+    assert "One." in out and "Two." in out and "Three." in out
+    assert "***" not in out
+
+
+def test_fallback_sectionize_splits_on_blank_lines_when_no_glyphs():
+    story = "One.\n\nTwo.\n\nThree.\n\nFour."
+    out = fallback_sectionize(story, 2)
+    assert out.count("<<<SECTION") == 2
+    assert "Four." in out
+
+
+def test_fallback_sectionize_never_emits_more_sections_than_chunks():
+    out = fallback_sectionize("Only one paragraph.", 5)
+    assert out.count("<<<SECTION") == 1
+
+
+def test_sectionize_falls_back_when_anchors_do_not_match():
+    out = sectionize(_STORY, ["nope", "still nope"], 2)
+    assert out.count("<<<SECTION") == 2
+
+
+def test_sectionize_falls_back_when_there_are_too_many_anchors():
+    """Anchor count must match the plan's section count, or draft section N
+    stops meaning plan section N."""
+    out = sectionize(_STORY, ["The fleet dropped out", "By morning the line",
+                              "At Frankfurt the timing"], 2)
+    assert out.count("<<<SECTION") == 2
+
+
+def test_sectionize_falls_back_when_there_are_too_few_anchors():
+    out = sectionize(_STORY, ["The fleet dropped out"], 3)
+    assert out.count("<<<SECTION") == 3
+
+
+def test_insert_markers_logs_a_small_front_matter_drop(capsys):
+    insert_markers(_STORY, ["The fleet dropped out", "By morning the line",
+                            "At Frankfurt the timing"])
+    assert "dropp" in capsys.readouterr().out.lower()
+
+
+def test_insert_markers_rejects_an_oversized_drop():
+    """Losing real scenes is an anchor failure, not front matter."""
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    assert insert_markers(story, ["The real opening line", "And later"]) is None
+
+
+def test_sectionize_falls_back_after_an_oversized_drop():
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    out = sectionize(story, ["The real opening line", "And later"], 2)
+    assert "word word" in out  # the dropped prose survives via the fallback
+
+
+def test_number_groups_skips_an_empty_group_without_skipping_a_number():
+    """The trap this closes: numbering off the unfiltered list would emit
+    SECTION 1 then SECTION 3, and every consumer indexes sections by number."""
+    assert _number_groups(["alpha", "", "beta"]) == (
+        "<<<SECTION 1>>>\nalpha\n\n<<<SECTION 2>>>\nbeta")
+    assert _number_groups(["", ""]) == ""
+
+
+def test_fallback_sectionize_numbers_kept_groups_contiguously():
+    """Characterisation of the whole path: markers always run 1..N."""
+    story = "One.\n\nTwo.\n\nThree.\n\nFour.\n\nFive."
+    for count in range(1, 8):
+        out = fallback_sectionize(story, count)
+        numbers = [int(n) for n in re.findall(r"<<<SECTION (\d+)>>>", out)]
+        assert numbers == list(range(1, len(numbers) + 1)), (count, out)
+
+
+def test_fallback_sectionize_always_emits_a_marker():
+    """Unreachable upstream, but the guard must hold: never a marker-less string."""
+    assert fallback_sectionize("   \n\n  ", 3).startswith("<<<SECTION 1>>>")
+
+
+def test_sectionize_logs_one_reason_for_an_oversized_drop(capsys):
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    sectionize(story, ["The real opening line", "And later"], 2)
+    out = capsys.readouterr().out
+    assert "would drop" in out
+    assert "Anchors did not fit" not in out
+    assert out.count("structural fallback") == 1
+
+
+def test_sectionize_still_logs_a_generic_reason_for_a_plain_anchor_miss(capsys):
+    sectionize(_STORY, ["nope", "still nope"], 2)
+    out = capsys.readouterr().out
+    assert "Anchors did not fit" in out
+    assert out.count("structural fallback") == 1
+
+
+def test_fallback_sectionize_keeps_front_matter_by_design():
+    """Documented divergence from insert_markers: the fallback runs when the
+    anchors could not be trusted, so it never guesses text away."""
+    out = fallback_sectionize(_STORY, 3)
+    assert "Owen Cardwell-Copenhefer" in out
+
+
+def test_agent_run_returns_one_anchor_per_line():
+    agent = SectionizerAgent()
+    with patch.object(agent, "_call_claude",
+                      return_value="The fleet dropped out\n\nBy morning the line\n"):
+        anchors = agent.run(plan="p", story=_STORY, section_count=2)
+    assert anchors == ["The fleet dropped out", "By morning the line"]
+
+
+def test_agent_uses_the_feedback_model():
+    from agents.base_agent import FEEDBACK_MODEL
+    assert SectionizerAgent().model == FEEDBACK_MODEL

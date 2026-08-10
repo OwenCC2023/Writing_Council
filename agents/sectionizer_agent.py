@@ -1,0 +1,160 @@
+"""Insert <<<SECTION N>>> markers into an existing draft.
+
+The model returns only anchors — the opening words of each section — and Python
+does the insertion. The prose is never re-emitted, so it cannot mutate and no
+tokens are spent echoing the story back.
+"""
+
+import re
+
+from .base_agent import BaseAgent, FEEDBACK_MODEL
+
+_GLYPH_BREAK = re.compile(r"^\s*(\*\s*\*\s*\*|-{3,}|#{1,6})\s*$", re.MULTILINE)
+
+# Text before the first anchor is dropped: that is how manuscript front matter
+# (byline, contact block, word count, title page) is discarded. A real header of
+# that kind runs well under 100 words, so 500 clears it with wide margin while
+# still catching a first anchor placed several paragraphs into the story — which
+# would silently delete the author's actual prose on a revise run.
+MAX_DROPPED_WORDS = 500
+
+SYSTEM_PROMPT = """\
+You are given a narrative plan and the full text of a draft that follows it. Return the \
+anchor for each planned section: the first six to ten words of the draft passage where \
+that section begins, copied EXACTLY from the draft — same words, same punctuation, same \
+capitalisation.
+
+Rules:
+- One anchor per line. Nothing else: no numbering, no quotes, no commentary.
+- Emit exactly as many anchors as the plan has sections, in story order.
+- Every anchor must appear in the draft word for word, and must be unique in it. If an \
+opening phrase repeats elsewhere in the draft, extend the anchor until it is unique.
+- The first anchor marks where the narrative itself begins. Skip any manuscript front \
+matter — byline, contact block, word count, title page.\
+"""
+
+
+def insert_markers(story: str, anchors: list, reason: list = None) -> str:
+    """Return the story with <<<SECTION N>>> markers, or None if anchors don't fit.
+
+    Rejects an anchor that is absent, appears more than once, or arrives out of
+    order. Text before the first anchor is dropped (manuscript front matter);
+    a small drop is logged, and a drop larger than MAX_DROPPED_WORDS is treated
+    as an anchor failure rather than accepted.
+
+    `reason`, when a list is passed, receives the specific rejection cause
+    instead of it being printed here, so the caller can emit exactly one line
+    explaining what happened rather than a specific line plus a generic one.
+    """
+    if not anchors:
+        return None
+    positions = []
+    for anchor in anchors:
+        first = story.find(anchor)
+        if first < 0 or story.find(anchor, first + 1) != -1:
+            return None
+        positions.append(first)
+    if positions != sorted(positions) or len(set(positions)) != len(positions):
+        return None
+
+    dropped = len(story[:positions[0]].split())
+    if dropped:
+        if dropped > MAX_DROPPED_WORDS:
+            message = (f"First anchor would drop {dropped} words "
+                       f"(limit {MAX_DROPPED_WORDS})")
+            if reason is None:
+                print(f"[sectionizer] {message} — rejecting the anchors.")
+            else:
+                reason.append(message)
+            return None
+        print(f"[sectionizer] Dropping {dropped} words of front matter before "
+              f"the first anchor.")
+
+    chunks = []
+    for i, start in enumerate(positions):
+        end = positions[i + 1] if i + 1 < len(positions) else len(story)
+        chunks.append(f"<<<SECTION {i + 1}>>>\n{story[start:end].strip()}")
+    return "\n\n".join(chunks)
+
+
+def _split_chunks(story: str) -> list:
+    """Split on scene-break glyphs, then on blank lines if that wasn't enough."""
+    chunks = [c.strip() for c in _GLYPH_BREAK.split(story) if c and c.strip()]
+    chunks = [c for c in chunks if not _GLYPH_BREAK.match(c)]
+    if len(chunks) > 1:
+        return chunks
+    return [c.strip() for c in re.split(r"\n\s*\n", story) if c.strip()]
+
+
+def _number_groups(groups: list) -> str:
+    """Mark the non-empty groups, numbered contiguously from 1.
+
+    Numbering off the kept groups rather than the raw list is what keeps the
+    numbers contiguous: an empty group must not consume a section number, since
+    every downstream consumer indexes sections by that number.
+    """
+    kept = [g for g in groups if g]
+    return "\n\n".join(f"<<<SECTION {i + 1}>>>\n{g}" for i, g in enumerate(kept))
+
+
+def fallback_sectionize(story: str, count: int) -> str:
+    """Group the draft into at most `count` sections without an LLM.
+
+    Unlike insert_markers, this KEEPS manuscript front matter. The divergence is
+    deliberate: this path runs precisely when the model's anchors could not be
+    trusted, so there is no reliable signal for where the narrative begins, and
+    guessing would risk deleting the author's prose on a revise run. Losing a
+    byline into section 1 is the cheaper failure — a reviewer can flag a stray
+    byline, but nothing can recover deleted text.
+    """
+    if not story.strip():
+        # Unreachable in the pipeline: load_story_text and WritingCouncil.run
+        # both reject empty input upstream. Guarded anyway so the function never
+        # returns a marker-less string that downstream section parsing would
+        # silently read as "no sections".
+        return "<<<SECTION 1>>>"
+    chunks = _split_chunks(story)
+    count = max(1, min(count, len(chunks)))
+    per = len(chunks) / count
+    groups = []
+    for i in range(count):
+        start = int(round(i * per))
+        end = int(round((i + 1) * per)) if i + 1 < count else len(chunks)
+        groups.append("\n\n".join(chunks[start:end]).strip())
+    return _number_groups(groups)
+
+
+def sectionize(story: str, anchors: list, count: int) -> str:
+    """Anchor-based marking when it fits; deterministic fallback otherwise.
+
+    The anchor count must equal `count`: every downstream consumer assumes plan
+    section N is draft section N, so a mismatched set would silently misalign
+    revision instructions with the prose they target.
+    """
+    if len(anchors) != count:
+        print(f"[sectionizer] Got {len(anchors)} anchors for {count} plan sections "
+              f"— using structural fallback.")
+        return fallback_sectionize(story, count)
+    reason = []
+    marked = insert_markers(story, anchors, reason)
+    if marked is not None:
+        return marked
+    why = reason[0] if reason else "Anchors did not fit the draft"
+    print(f"[sectionizer] {why} — using structural fallback.")
+    return fallback_sectionize(story, count)
+
+
+class SectionizerAgent(BaseAgent):
+    """Returns one anchor phrase per planned section."""
+
+    def __init__(self, model: str = FEEDBACK_MODEL):
+        super().__init__(model=model)
+
+    def run(self, plan: str, story: str, section_count: int) -> list:
+        user_prompt = (
+            f"NARRATIVE PLAN:\n{plan}\n\n"
+            f"DRAFT:\n{story}\n\n"
+            f"Return exactly {section_count} anchors, one per line."
+        )
+        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
+        return [line.strip() for line in output.splitlines() if line.strip()]

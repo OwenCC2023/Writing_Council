@@ -1,7 +1,9 @@
+import sys
 from pathlib import Path
 
 from orchestrator import WritingCouncil
 from document_writer import save_as_manuscript, resolve_output_path
+from story_intake import load_story_text
 
 
 def _load(path: str, fallback: str) -> str:
@@ -17,6 +19,14 @@ AUTHOR = "Owen Cardwell-Copenhefer"
 STYLE = ""  # e.g. "clipped", "flowery", "hemingway", "dark" — or "" for no style
 CONSTRAINT = ""  # hard formal rule, e.g. "exactly 200 words", "forbidden words: love, death",
                  # "told as an obituary", "second person throughout" — or "" for none
+
+SOURCE_STORY_PATH = ""   # path to an existing .txt/.md/.docx story, or "" for a fresh run
+REWRITE_MODE = ""        # "reimagine" (new story on the original's bones) or
+                         # "revise" (edit the original prose). "" defaults to reimagine.
+REWRITE_NOTES = ""       # e.g. "cut it to 3,000 words", "second person", "darker ending"
+# With SOURCE_STORY_PATH set, leaving TARGET_LENGTH blank keeps the original's length.
+TARGET_LENGTH = "8,000 words"
+TARGET_AUDIENCE = "Adult sci-fi readers"
 
 IDEA_PATH = ""  # path to a .txt file, or "" to use the inline string below
 IDEA = """
@@ -41,16 +51,27 @@ WORLD_RULES = """
 def main() -> None:
     """Run a real council pass and save the manuscript. Billed and long —
     only runs when this file is executed directly, never on import."""
+    try:
+        source_story = load_story_text(SOURCE_STORY_PATH) if SOURCE_STORY_PATH else ""
+    except (ValueError, FileNotFoundError) as exc:
+        # A bad SOURCE_STORY_PATH is a config typo; say so instead of a traceback.
+        print(f"Could not read SOURCE_STORY_PATH: {exc}")
+        sys.exit(1)
+
     council = WritingCouncil()
     result = council.run(
         idea=_load(IDEA_PATH, IDEA),
-        target_length="8,000 words",
-        target_audience="Adult sci-fi readers",
+        target_length=TARGET_LENGTH,
+        target_audience=TARGET_AUDIENCE,
         world_rules=_load(WORLD_RULES_PATH, WORLD_RULES),
         framework="Short Story",                     # optional
         style=STYLE,                                 # optional
         constraint=CONSTRAINT,                       # optional
         title=TITLE,
+        source_story=source_story,                   # optional — rewrite an existing story
+        source_filename=SOURCE_STORY_PATH,
+        rewrite_mode=REWRITE_MODE,
+        rewrite_notes=REWRITE_NOTES,
         # image="path/to/world_reference.png",       # optional — local file or http/https URL;
         #                                            # the planner will deduce world rules from it
     )
@@ -64,6 +85,11 @@ def main() -> None:
         details=result.get("planning_details"),
     )
     print(f"Saved manuscript: {path}")
+
+    # The brief the intake agent extracted from the original story
+    if result.get("intake_brief"):
+        print("\n--- STORY BRIEF (extracted from the original) ---")
+        print(result["intake_brief"])
 
     # Deterministic constraint verification (only when a countable constraint was set)
     cc = result.get("constraint_check")

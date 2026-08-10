@@ -1,0 +1,19 @@
+{
+  "name": "writing-council-ui-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Browser-UI tests for Writing Council",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OwenCC2023/Writing_Council.git"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.9"
+  }
+}

@@ -100,3 +100,52 @@ def test_plan_revision_prose_non_earth_drops_world_tag():
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="pf",
                                   consistency_feedback="cf", non_earth=True)
     assert "[WORLD]" in m.call_args.args[0]
+
+
+from agents.planning_agent import PLAN_EXISTING_ADDENDUM
+
+
+def test_run_without_new_params_leaves_prompts_unchanged():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a")
+    user_prompt = m.call_args.args[1]
+    assert "STORY BRIEF" not in user_prompt
+    assert "REWRITE DIRECTIVE" not in user_prompt
+    assert "ORIGINAL STORY TEXT" not in user_prompt
+    assert PLAN_EXISTING_ADDENDUM not in m.call_args.args[0]
+
+
+def test_run_threads_the_whole_brief_into_the_prompt():
+    agent = PlanningAgent()
+    brief = "=== STORY BRIEF ===\nCHARACTERS: Ligatto — wants vindication\nPLOT: he attacks"
+    with patch.object(agent, "_call_claude", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a", brief=brief)
+    user_prompt = m.call_args.args[1]
+    assert "Ligatto — wants vindication" in user_prompt
+    assert "he attacks" in user_prompt
+
+
+def test_run_renders_rewrite_notes_as_a_directive_block():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a",
+                  rewrite_notes="cut it to 3,000 words")
+    user_prompt = m.call_args.args[1]
+    assert "REWRITE DIRECTIVE" in user_prompt
+    assert "cut it to 3,000 words" in user_prompt
+    assert "outranks" in user_prompt.lower()
+
+
+def test_plan_existing_adds_addendum_and_source_story():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="plan") as m:
+        agent.run(idea="i", target_length="1k", target_audience="a",
+                  source_story="The fleet dropped out of the lane.", plan_existing=True)
+    assert PLAN_EXISTING_ADDENDUM in m.call_args.args[0]
+    assert "The fleet dropped out of the lane." in m.call_args.args[1]
+
+
+def test_plan_existing_addendum_overrides_non_earth_chunking():
+    assert "MORE, SMALLER" in PLAN_EXISTING_ADDENDUM or "more, smaller" in PLAN_EXISTING_ADDENDUM
+    assert "scene structure" in PLAN_EXISTING_ADDENDUM

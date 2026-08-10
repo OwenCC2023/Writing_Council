@@ -1,5 +1,6 @@
 import base64
 import os
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 import anthropic
@@ -11,6 +12,27 @@ FEEDBACK_MODEL = "claude-haiku-4-5"
 # Model for the initial plan + initial write only (Outer's first inner call).
 # Revisions and reviewers keep their own models.
 INITIAL_DRAFT_MODEL = "claude-opus-5"
+
+# Output ceiling. Prose runs ~1.4 tokens per word; the ceiling keeps a runaway
+# target from requesting more than the API will return.
+_TOKENS_PER_WORD = 1.4
+MAX_OUTPUT_TOKENS = 32000
+
+
+def max_tokens_for(target_length: str, floor: int) -> int:
+    """Derive an output budget from a target length like "8,000 words".
+
+    Returns `floor` when no count can be parsed, so an unrecognised target
+    behaves exactly as it does today. Never returns less than `floor`.
+    """
+    match = re.search(r"[\d,]+", target_length or "")
+    if not match:
+        return floor
+    digits = match.group().replace(",", "")
+    if not digits:
+        return floor
+    words = int(digits)
+    return max(floor, min(int(words * _TOKENS_PER_WORD), MAX_OUTPUT_TOKENS))
 
 # The Sonnet 5 / Opus 5 family runs adaptive thinking on by default when the
 # `thinking` field is omitted, which would (a) place a thinking block at
