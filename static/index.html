@@ -81,9 +81,9 @@
   }
   .mode-option { display: block; font-weight: normal; margin-top: 0.4rem; font-size: 0.9rem; }
   .mode-option input { margin-right: 0.4rem; }
-  #intake-brief { margin-bottom: 0.75rem; }
-  #intake-brief summary { cursor: pointer; font-size: 0.9rem; font-weight: bold; }
-  #intake-brief pre {
+  #intake_brief { margin-bottom: 0.75rem; }
+  #intake_brief summary { cursor: pointer; font-size: 0.9rem; font-weight: bold; }
+  #intake_brief pre {
     white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; margin: 0.5rem 0 0;
     padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 3px;
     background: var(--bg-input); color: var(--text);
@@ -231,9 +231,9 @@
   <div id="output-section" class="hidden">
     <h2>Output</h2>
     <div id="constraint-check" class="hidden"></div>
-    <details id="intake-brief" class="hidden">
+    <details id="intake_brief" class="hidden">
       <summary>Story brief</summary>
-      <pre id="intake-brief-text"></pre>
+      <pre id="intake_brief_text"></pre>
     </details>
     <textarea id="story-output" readonly></textarea>
     <div class="warning">&#9888; Output is not saved &mdash; download before closing this tab.</div>
@@ -465,8 +465,8 @@
     constraintCheck.className = cc.passed ? 'cc-pass' : 'cc-fail';
   }
 
-  const intakeBrief = document.getElementById('intake-brief');
-  const intakeBriefText = document.getElementById('intake-brief-text');
+  const intakeBrief = document.getElementById('intake_brief');
+  const intakeBriefText = document.getElementById('intake_brief_text');
   function renderIntakeBrief(brief) {
     intakeBriefText.textContent = brief || '';
     intakeBrief.classList.toggle('hidden', !brief);

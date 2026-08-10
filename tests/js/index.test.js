@@ -21,11 +21,28 @@ async function attachStory(win, name = 'sforzato.txt', body = 'The fleet dropped
 }
 
 describe('story upload controls', () => {
-  it('hides the rewrite controls until a story is attached', () => {
+  it('toggles the rewrite controls with the attached story', async () => {
+    // Asserting only on the initial markup would pass with the reveal/hide JS
+    // deleted, so this walks the whole cycle instead.
     const win = loadPage();
     const controls = win.document.getElementById('rewrite_controls');
     expect(controls).not.toBeNull();
     expect(controls.hidden || controls.style.display === 'none').toBe(true);
+    await attachStory(win);
+    expect(controls.hidden || controls.style.display === 'none').toBe(false);
+    win.document.getElementById('rewrite_notes').value = 'darker ending';
+    win.document.getElementById('story_remove').click();
+    expect(controls.hidden || controls.style.display === 'none').toBe(true);
+    expect(win.document.getElementById('rewrite_notes').value).toBe('');
+  });
+
+  it('replaces the held story when a second file is attached', async () => {
+    const win = loadPage();
+    await attachStory(win, 'first.txt', 'The first draft.');
+    await attachStory(win, 'second.txt', 'The second draft.');
+    expect(win.document.getElementById('story_name').textContent).toBe('second.txt');
+    // Only one chip is ever shown, and the payload carries the newer file.
+    expect(win.document.querySelectorAll('#story_chip').length).toBe(1);
   });
 
   it('reveals the mode radios and notes box once a story is attached', async () => {
@@ -97,6 +114,19 @@ describe('run payload', () => {
     expect(sent.body.story_file.data).toContain('base64,');
     expect(sent.body.rewrite_mode).toBe('revise');
     expect(sent.body.rewrite_notes).toBe('darker ending');
+  });
+
+  it('sends only the most recent story when two are attached in a row', async () => {
+    await attachStory(win, 'first.txt', 'The first draft.');
+    await attachStory(win, 'second.txt', 'The second draft.');
+    win.document.getElementById('author').value = 'A. Writer';
+    win.document.getElementById('run-btn').click();
+    await vi.waitFor(() => expect(sent).not.toBeNull());
+    // story_file is a single object, not a list, and it is the second upload.
+    expect(Array.isArray(sent.body.story_file)).toBe(false);
+    expect(sent.body.story_file.filename).toBe('second.txt');
+    const decoded = win.atob(sent.body.story_file.data.split(',')[1]);
+    expect(decoded).toBe('The second draft.');
   });
 
   it('omits story_file on a fresh run', async () => {
