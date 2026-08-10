@@ -15,6 +15,7 @@ from agents import (
     WorldBuilderAgent,
     StrangenessReviewerAgent,
     SensoryQuotaAgent,
+    VarianceReviewerAgent,
     EngineReviewerAgent,
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL, max_tokens_for
@@ -73,6 +74,7 @@ class WritingCouncil:
         self.world_builder = WorldBuilderAgent()
         self.strangeness = StrangenessReviewerAgent()
         self.sensory = SensoryQuotaAgent()
+        self.variance = VarianceReviewerAgent()
         self.engine = EngineReviewerAgent()
         self.intake = IntakeAgent()
         self.sectionizer = SectionizerAgent()
@@ -658,19 +660,27 @@ class WritingCouncil:
         """One line-level polish pass. Runs consistency + prose-mode checker in
         parallel, forces all prose findings into a section-revision plan, and
         applies it. Returns the revised story (markers intact)."""
-        print(f"[{label}] Running ConsistencyAgent and AIFailureCheckerAgent "
-              f"(prose mode, top {top_n}) in parallel...")
+        print(f"[{label}] Running ConsistencyAgent, AIFailureCheckerAgent "
+              f"(prose mode, top {top_n}) and VarianceReviewerAgent in parallel...")
         self._log_start(f"{label}.consistency", "ConsistencyAgent")
         self._log_start(f"{label}.prose_check", "AIFailureCheckerAgent")
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        self._log_start(f"{label}.variance", "VarianceReviewerAgent")
+        with ThreadPoolExecutor(max_workers=3) as executor:
             f_cons = executor.submit(self.consistency.run, story=story,
                                      canon_sheet=canon_sheet)
             f_prose = executor.submit(self.ai_checker.run_prose, story=story, top_n=top_n,
                                       canon_sheet=canon_sheet)
+            # Variance runs here, not in the Inner fan-out: this pass always sees the
+            # whole story, while Inner may pass only the sections the writer touched,
+            # and a repeated-technique count is meaningless on a subset.
+            f_var = executor.submit(self.variance.run, story=story, top_n=top_n,
+                                    canon_sheet=canon_sheet)
             cons_result = f_cons.result()
             prose_result = f_prose.result()
+            var_result = f_var.result()
         self._log_end(cons_result, step=f"{label}.consistency")
         self._log_end(prose_result, step=f"{label}.prose_check")
+        self._log_end(var_result, step=f"{label}.variance")
 
         print(f"[{label}] Running PlanningAgent (prose revision plan)...")
         self._log_start(f"{label}.plan_revision", "PlanningAgent")
@@ -680,6 +690,7 @@ class WritingCouncil:
             prose_feedback=prose_result["output"],
             consistency_feedback=cons_result["output"],
             non_earth=non_earth,
+            variance_feedback=var_result["output"],
         )
         self._log_end(plan_result, step=f"{label}.plan_revision")
         revision_plan = plan_result["output"]

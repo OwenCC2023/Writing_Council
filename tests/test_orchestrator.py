@@ -41,6 +41,8 @@ def test_run_prose_pass_calls_agents_in_order():
         return_value={"agent": "ConsistencyAgent", "output": "cons"})
     council.ai_checker.run_prose = MagicMock(
         return_value={"agent": "AIFailureCheckerAgent", "output": "prose"})
+    council.variance.run = MagicMock(
+        return_value={"agent": "VarianceReviewerAgent", "output": "var"})
     council.planner.plan_revision_prose = MagicMock(
         return_value={"agent": "PlanningAgent", "output": "revplan"})
     council.writer.revise = MagicMock(
@@ -54,7 +56,7 @@ def test_run_prose_pass_calls_agents_in_order():
     council.consistency.run.assert_called_once_with(story="story", canon_sheet="")
     council.planner.plan_revision_prose.assert_called_once_with(
         story="story", plan="plan", prose_feedback="prose", consistency_feedback="cons",
-        non_earth=False)
+        non_earth=False, variance_feedback="var")
     council.writer.revise.assert_called_once_with(
         plan="plan", story="story", feedback="revplan",
         model=None, canon_sheet="", world_bible="", constraint="",
@@ -243,3 +245,26 @@ def test_parse_world_class_earth_and_missing():
     assert council._parse_world_class("<<<WORLD_CLASS: EARTH>>>\nx")[0] is False
     non_earth, stripped = council._parse_world_class("no tag here")
     assert non_earth is False and stripped == "no tag here"
+
+
+def test_prose_pass_variance_sees_full_story_and_gets_canon():
+    """Variance counts repeated techniques, so it must get the whole draft — not the
+    section subset the Inner fan-out sometimes works on — plus the canon sheet."""
+    council = WritingCouncil()
+    council.consistency.run = MagicMock(
+        return_value={"agent": "ConsistencyAgent", "output": "cons"})
+    council.ai_checker.run_prose = MagicMock(
+        return_value={"agent": "AIFailureCheckerAgent", "output": "prose"})
+    council.variance.run = MagicMock(
+        return_value={"agent": "VarianceReviewerAgent", "output": "var"})
+    council.planner.plan_revision_prose = MagicMock(
+        return_value={"agent": "PlanningAgent", "output": "revplan"})
+    council.writer.revise = MagicMock(
+        return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
+
+    full = "<<<SECTION 1>>>\nA.\n\n<<<SECTION 2>>>\nB."
+    council._run_prose_pass(plan="plan", story=full, top_n=7, label="prose.1",
+                            non_earth=True, canon_sheet="CANON")
+
+    council.variance.run.assert_called_once_with(
+        story=full, top_n=7, canon_sheet="CANON")

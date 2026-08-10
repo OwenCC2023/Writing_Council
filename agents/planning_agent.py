@@ -358,7 +358,8 @@ class PlanningAgent(BaseAgent):
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision_prose(self, story: str, plan: str,
-                            prose_feedback: str, consistency_feedback: str, non_earth: bool = False) -> dict:
+                            prose_feedback: str, consistency_feedback: str,
+                            non_earth: bool = False, variance_feedback: str = "") -> dict:
         """Turn prose-editor findings into a forced-all section revision plan.
 
         Every prose finding must become a SECTION revision; structural ops and
@@ -370,6 +371,8 @@ class PlanningAgent(BaseAgent):
             prose_feedback: Prose-level findings from the editor.
             consistency_feedback: Consistency-level findings.
             non_earth: If True, append bucket-handling clause for non-Earth worlds.
+            variance_feedback: Repeated-technique findings, if any. Folded in with the
+                prose findings — every one is force-fixed the same way.
         """
         section_nums = sorted(int(m) for m in re.findall(r'<<<SECTION\s+(\d+)>>>', story))
         section_list = (
@@ -383,6 +386,15 @@ class PlanningAgent(BaseAgent):
             f"{section_list}\n\n"
             f"PROSE FINDINGS (every one MUST be fixed):\n{prose_feedback}\n\n"
             f"CONSISTENCY NOTES (fold in text-level fixes only):\n{consistency_feedback}\n\n"
+        )
+        if variance_feedback:
+            user_prompt += (
+                "REPEATED-TECHNIQUE FINDINGS (every one MUST be fixed, and the cuts are "
+                "the fix — a repeated move is removed by deletion or replacement, never "
+                "by adding a qualifier to it):\n"
+                f"{variance_feedback}\n\n"
+            )
+        user_prompt += (
             "Produce the structured revision plan using the exact format specified."
         )
         system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if non_earth else "")

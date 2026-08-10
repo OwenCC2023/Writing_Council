@@ -18,7 +18,15 @@ defect. Tag every finding you report with one of two buckets:
 - [CRAFT]: a genuine craft flaw (rhythm, grammar, clarity, an actual continuity \
   contradiction, an AI tic). These get fixed.
 - [WORLD]: the passage only reads odd because it commits to a canon rule. This is usually \
-  authorial intent, not a bug.\
+  authorial intent, not a bug.
+
+The [WORLD] bucket covers strangeness, never repetition. Any finding about a repeated \
+construction — tic density, a sentence rhythm that does not vary, a single sensory register \
+carrying most of the manuscript, tonal homogenization, four POV characters who narrate \
+alike — is ALWAYS [CRAFT], however well the repeated move fits this world. "Consistent with \
+the world" and "structural to the story" are not defenses for a construction used forty \
+times; a reader registers the repetition, not the justification. Do not bucket a repetition \
+finding as [WORLD], and do not talk yourself out of counting one.\
 """
 
 _AUTHORITY_CLAUSE = """
