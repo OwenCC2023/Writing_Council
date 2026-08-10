@@ -34,13 +34,17 @@ matter — byline, contact block, word count, title page.\
 """
 
 
-def insert_markers(story: str, anchors: list) -> str:
+def insert_markers(story: str, anchors: list, reason: list = None) -> str:
     """Return the story with <<<SECTION N>>> markers, or None if anchors don't fit.
 
     Rejects an anchor that is absent, appears more than once, or arrives out of
     order. Text before the first anchor is dropped (manuscript front matter);
-    the dropped word count is always logged, and a drop larger than
-    MAX_DROPPED_WORDS is treated as an anchor failure rather than accepted.
+    a small drop is logged, and a drop larger than MAX_DROPPED_WORDS is treated
+    as an anchor failure rather than accepted.
+
+    `reason`, when a list is passed, receives the specific rejection cause
+    instead of it being printed here, so the caller can emit exactly one line
+    explaining what happened rather than a specific line plus a generic one.
     """
     if not anchors:
         return None
@@ -56,8 +60,12 @@ def insert_markers(story: str, anchors: list) -> str:
     dropped = len(story[:positions[0]].split())
     if dropped:
         if dropped > MAX_DROPPED_WORDS:
-            print(f"[sectionizer] First anchor would drop {dropped} words "
-                  f"(limit {MAX_DROPPED_WORDS}) — rejecting the anchors.")
+            message = (f"First anchor would drop {dropped} words "
+                       f"(limit {MAX_DROPPED_WORDS})")
+            if reason is None:
+                print(f"[sectionizer] {message} — rejecting the anchors.")
+            else:
+                reason.append(message)
             return None
         print(f"[sectionizer] Dropping {dropped} words of front matter before "
               f"the first anchor.")
@@ -79,7 +87,21 @@ def _split_chunks(story: str) -> list:
 
 
 def fallback_sectionize(story: str, count: int) -> str:
-    """Group the draft into at most `count` sections without an LLM."""
+    """Group the draft into at most `count` sections without an LLM.
+
+    Unlike insert_markers, this KEEPS manuscript front matter. The divergence is
+    deliberate: this path runs precisely when the model's anchors could not be
+    trusted, so there is no reliable signal for where the narrative begins, and
+    guessing would risk deleting the author's prose on a revise run. Losing a
+    byline into section 1 is the cheaper failure — a reviewer can flag a stray
+    byline, but nothing can recover deleted text.
+    """
+    if not story.strip():
+        # Unreachable in the pipeline: load_story_text and WritingCouncil.run
+        # both reject empty input upstream. Guarded anyway so the function never
+        # returns a marker-less string that downstream section parsing would
+        # silently read as "no sections".
+        return "<<<SECTION 1>>>"
     chunks = _split_chunks(story)
     count = max(1, min(count, len(chunks)))
     per = len(chunks) / count
@@ -87,9 +109,13 @@ def fallback_sectionize(story: str, count: int) -> str:
     for i in range(count):
         start = int(round(i * per))
         end = int(round((i + 1) * per)) if i + 1 < count else len(chunks)
-        groups.append("\n\n".join(chunks[start:end]).strip())
+        group = "\n\n".join(chunks[start:end]).strip()
+        if group:
+            groups.append(group)
+    # Numbered off the kept groups, so section numbers stay contiguous even if a
+    # group came out empty — downstream consumers index by number.
     return "\n\n".join(
-        f"<<<SECTION {i + 1}>>>\n{g}" for i, g in enumerate(groups) if g
+        f"<<<SECTION {i + 1}>>>\n{g}" for i, g in enumerate(groups)
     )
 
 
@@ -104,10 +130,12 @@ def sectionize(story: str, anchors: list, count: int) -> str:
         print(f"[sectionizer] Got {len(anchors)} anchors for {count} plan sections "
               f"— using structural fallback.")
         return fallback_sectionize(story, count)
-    marked = insert_markers(story, anchors)
+    reason = []
+    marked = insert_markers(story, anchors, reason)
     if marked is not None:
         return marked
-    print("[sectionizer] Anchors did not fit the draft — using structural fallback.")
+    why = reason[0] if reason else "Anchors did not fit the draft"
+    print(f"[sectionizer] {why} — using structural fallback.")
     return fallback_sectionize(story, count)
 
 

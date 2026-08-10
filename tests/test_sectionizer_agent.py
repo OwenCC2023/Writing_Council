@@ -1,3 +1,4 @@
+import re
 from unittest.mock import patch
 
 from agents.sectionizer_agent import (
@@ -96,6 +97,43 @@ def test_sectionize_falls_back_after_an_oversized_drop():
     story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
     out = sectionize(story, ["The real opening line", "And later"], 2)
     assert "word word" in out  # the dropped prose survives via the fallback
+
+
+def test_fallback_sectionize_numbers_kept_groups_contiguously():
+    """Numbers come off the kept groups, so an empty group cannot skip a number."""
+    story = "One.\n\nTwo.\n\nThree.\n\nFour.\n\nFive."
+    for count in range(1, 8):
+        out = fallback_sectionize(story, count)
+        numbers = [int(n) for n in re.findall(r"<<<SECTION (\d+)>>>", out)]
+        assert numbers == list(range(1, len(numbers) + 1)), (count, out)
+
+
+def test_fallback_sectionize_always_emits_a_marker():
+    """Unreachable upstream, but the guard must hold: never a marker-less string."""
+    assert fallback_sectionize("   \n\n  ", 3).startswith("<<<SECTION 1>>>")
+
+
+def test_sectionize_logs_one_reason_for_an_oversized_drop(capsys):
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    sectionize(story, ["The real opening line", "And later"], 2)
+    out = capsys.readouterr().out
+    assert "would drop" in out
+    assert "Anchors did not fit" not in out
+    assert out.count("structural fallback") == 1
+
+
+def test_sectionize_still_logs_a_generic_reason_for_a_plain_anchor_miss(capsys):
+    sectionize(_STORY, ["nope", "still nope"], 2)
+    out = capsys.readouterr().out
+    assert "Anchors did not fit" in out
+    assert out.count("structural fallback") == 1
+
+
+def test_fallback_sectionize_keeps_front_matter_by_design():
+    """Documented divergence from insert_markers: the fallback runs when the
+    anchors could not be trusted, so it never guesses text away."""
+    out = fallback_sectionize(_STORY, 3)
+    assert "Owen Cardwell-Copenhefer" in out
 
 
 def test_agent_run_returns_one_anchor_per_line():
