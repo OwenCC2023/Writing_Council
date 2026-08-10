@@ -85,20 +85,20 @@ def test_plan_revision_earth_prompt_unchanged():
     assert m.call_args.args[0] == REVISION_PLAN_SYSTEM_PROMPT   # exact, unchanged
 
 
-def test_plan_revision_non_earth_adds_bucket_clause():
+def test_plan_revision_canon_aware_adds_bucket_clause():
     agent = PlanningAgent()
     with patch.object(agent, "_call_claude", return_value="out") as m:
-        agent.plan_revision(story="s", plan="p", feedbacks=["f"], non_earth=True)
+        agent.plan_revision(story="s", plan="p", feedbacks=["f"], canon_aware=True)
     sp = m.call_args.args[0]
     assert sp != REVISION_PLAN_SYSTEM_PROMPT
     assert "[WORLD]" in sp and "[CRAFT]" in sp
 
 
-def test_plan_revision_prose_non_earth_drops_world_tag():
+def test_plan_revision_prose_canon_aware_drops_world_tag():
     agent = PlanningAgent()
     with patch.object(agent, "_call_claude", return_value="out") as m:
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="pf",
-                                  consistency_feedback="cf", non_earth=True)
+                                  consistency_feedback="cf", canon_aware=True)
     assert "[WORLD]" in m.call_args.args[0]
 
 
@@ -172,3 +172,16 @@ def test_plan_revision_prose_omits_variance_block_when_empty():
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="f",
                                   consistency_feedback="c")
     assert "REPEATED-TECHNIQUE" not in m.call_args.args[1]
+
+
+def test_classifier_offers_three_tiers_and_a_sensory_test():
+    from agents.planning_agent import CLASSIFY_ADDENDUM
+    for tag in ("<<<WORLD_CLASS: EARTH>>>", "<<<WORLD_CLASS: SECONDARY>>>",
+                "<<<WORLD_CLASS: NON-EARTH>>>"):
+        assert tag in CLASSIFY_ADDENDUM
+    # The test is sensory ground, not rule count: wands in Britain is SECONDARY.
+    assert "WOULD A READER'S BODY KNOW THIS ROOM" in CLASSIFY_ADDENDUM
+    assert "SENSORY GROUND, not by how many rules differ" in CLASSIFY_ADDENDUM
+    # Only the top tier chunks smaller, and the prompt says the tier is expensive.
+    assert "If and only if NON-EARTH" in CLASSIFY_ADDENDUM
+    assert "expensive" in CLASSIFY_ADDENDUM

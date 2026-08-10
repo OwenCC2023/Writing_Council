@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from orchestrator import WritingCouncil
+import world_class as wc
 from agents.base_agent import INITIAL_DRAFT_MODEL
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 
@@ -56,7 +57,7 @@ def test_run_prose_pass_calls_agents_in_order():
     council.consistency.run.assert_called_once_with(story="story", canon_sheet="")
     council.planner.plan_revision_prose.assert_called_once_with(
         story="story", plan="plan", prose_feedback="prose", consistency_feedback="cons",
-        non_earth=False, variance_feedback="var")
+        canon_aware=False, variance_feedback="var")
     council.writer.revise.assert_called_once_with(
         plan="plan", story="story", feedback="revplan",
         model=None, canon_sheet="", world_bible="", constraint="",
@@ -116,10 +117,10 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
         "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nFinal.",
         "revised_sections": None})
 
-    plan, story, non_earth, canon, bible, _ = council._run_inner(
+    plan, story, world_class, canon, bible, _ = council._run_inner(
         idea="i", target_length="1k", target_audience="a")
 
-    assert non_earth is True
+    assert world_class == wc.NON_EARTH
     assert canon == "CANON" and bible == "BIBLE"
     council.world_builder.run.assert_called_once()
     council.planner.revise_with_world_bible.assert_called_once()
@@ -134,7 +135,7 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
     assert council.engine.run.call_args.kwargs["canon_sheet"] == "CANON"
     feedbacks = council.planner.plan_revision.call_args.kwargs["feedbacks"]
     assert "st" in feedbacks and "se" in feedbacks and "e" in feedbacks
-    assert council.planner.plan_revision.call_args.kwargs["non_earth"] is True
+    assert council.planner.plan_revision.call_args.kwargs["canon_aware"] is True
 
 
 def test_initial_inner_earth_skips_world_builder():
@@ -151,10 +152,10 @@ def test_initial_inner_earth_skips_world_builder():
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
 
-    _, _, non_earth, canon, bible, _ = council._run_inner(
+    _, _, world_class, canon, bible, _ = council._run_inner(
         idea="i", target_length="1k", target_audience="a")
 
-    assert non_earth is False
+    assert world_class == wc.EARTH
     assert canon == "" and bible == ""
     council.world_builder.run.assert_not_called()
     # Engine reviewer runs on EARTH too, with the plan and no canon.
@@ -168,21 +169,21 @@ def test_initial_inner_earth_skips_world_builder():
         story=council.planner.plan_revision.call_args.kwargs["story"],
         plan=council.planner.plan_revision.call_args.kwargs["plan"],
         feedbacks=council.planner.plan_revision.call_args.kwargs["feedbacks"],
-        non_earth=False)
+        canon_aware=False)
 
 
-def test_run_threads_non_earth_into_middle_and_prose():
+def test_run_threads_world_class_into_middle_and_prose():
     council = WritingCouncil()
     council._run_inner = MagicMock(
-        return_value=("plan", "<<<SECTION 1>>>\nD.", True, "CANON", "BIBLE", ""))
+        return_value=("plan", "<<<SECTION 1>>>\nD.", wc.NON_EARTH, "CANON", "BIBLE", ""))
     council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nM.")
     council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nP.")
 
     council.run(idea="i", target_length="1k", target_audience="a")
 
-    assert council._run_middle.call_args.kwargs["non_earth"] is True
+    assert council._run_middle.call_args.kwargs["world_class"] == wc.NON_EARTH
     assert council._run_middle.call_args.kwargs["canon_sheet"] == "CANON"
-    assert council._run_prose_pass.call_args.kwargs["non_earth"] is True
+    assert council._run_prose_pass.call_args.kwargs["world_class"] == wc.NON_EARTH
     assert council._run_prose_pass.call_args.kwargs["world_bible"] == "BIBLE"
 
 
@@ -234,17 +235,40 @@ def test_run_surfaces_deterministic_constraint_check():
 def test_parse_world_class_non_earth():
     council = WritingCouncil()
     plan = "<<<WORLD_CLASS: NON-EARTH>>>\n<<<SECTION 1>>>\nBody."
-    non_earth, stripped = council._parse_world_class(plan)
-    assert non_earth is True
+    world_class, stripped = council._parse_world_class(plan)
+    assert world_class == wc.NON_EARTH
     assert "WORLD_CLASS" not in stripped
     assert stripped.startswith("<<<SECTION 1>>>")
 
 
 def test_parse_world_class_earth_and_missing():
     council = WritingCouncil()
-    assert council._parse_world_class("<<<WORLD_CLASS: EARTH>>>\nx")[0] is False
-    non_earth, stripped = council._parse_world_class("no tag here")
-    assert non_earth is False and stripped == "no tag here"
+    assert council._parse_world_class("<<<WORLD_CLASS: EARTH>>>\nx")[0] == wc.EARTH
+    world_class, stripped = council._parse_world_class("no tag here")
+    assert world_class == wc.EARTH and stripped == "no tag here"
+
+
+def test_parse_world_class_secondary():
+    council = WritingCouncil()
+    world_class, stripped = council._parse_world_class(
+        "<<<WORLD_CLASS: SECONDARY>>>\n<<<SECTION 1>>>\nBody.")
+    assert world_class == wc.SECONDARY
+    assert stripped.startswith("<<<SECTION 1>>>")
+
+
+def test_parse_world_class_override_beats_the_tag_and_still_strips_it():
+    """The writer must never see the tag, whoever decided the class."""
+    council = WritingCouncil()
+    plan = "<<<WORLD_CLASS: NON-EARTH>>>\n<<<SECTION 1>>>\nBody."
+    world_class, stripped = council._parse_world_class(plan, override=wc.SECONDARY)
+    assert world_class == wc.SECONDARY
+    assert "WORLD_CLASS" not in stripped
+
+
+def test_parse_world_class_unreadable_tag_falls_back_to_earth():
+    """An unknown tier buys nothing rather than accidentally buying the harness."""
+    council = WritingCouncil()
+    assert council._parse_world_class("<<<WORLD_CLASS: MOON>>>\nx")[0] == wc.EARTH
 
 
 def test_prose_pass_variance_sees_full_story_and_gets_canon():
@@ -264,7 +288,98 @@ def test_prose_pass_variance_sees_full_story_and_gets_canon():
 
     full = "<<<SECTION 1>>>\nA.\n\n<<<SECTION 2>>>\nB."
     council._run_prose_pass(plan="plan", story=full, top_n=7, label="prose.1",
-                            non_earth=True, canon_sheet="CANON")
+                            world_class=wc.NON_EARTH, canon_sheet="CANON")
 
     council.variance.run.assert_called_once_with(
         story=full, top_n=7, canon_sheet="CANON")
+
+
+def _secondary_council():
+    council = WritingCouncil()
+    council.planner.run = MagicMock(return_value={
+        "agent": "PlanningAgent",
+        "output": "<<<WORLD_CLASS: SECONDARY>>>\n<<<SECTION 1>>>\nBody."})
+    council.world_builder.run = MagicMock(return_value={
+        "agent": "WorldBuilderAgent", "output": "o",
+        "canon_sheet": "CANON", "world_bible": ""})
+    council.planner.revise_with_world_bible = MagicMock()
+    council.writer.run = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nStory.",
+        "revised_sections": None})
+    council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
+    council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
+    council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
+    council.strangeness.run = MagicMock(return_value={"output": "st", "agent": "S"})
+    council.sensory.run = MagicMock(return_value={"output": "se", "agent": "Se"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.writer.revise = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nFinal.",
+        "revised_sections": None})
+    return council
+
+
+def test_secondary_builds_canon_only_and_skips_the_alien_harness():
+    """The tier that fixes the wands-in-Britain run: rules, but no bible, no bible-driven
+    plan rewrite, no Opus-on-every-pass, and neither strangeness reviewer."""
+    council = _secondary_council()
+
+    _, _, world_class, canon, bible, _ = council._run_inner(
+        idea="i", target_length="1k", target_audience="a")
+
+    assert world_class == wc.SECONDARY
+    assert canon == "CANON" and bible == ""
+    assert council.world_builder.run.call_args.kwargs["canon_only"] is True
+    council.planner.revise_with_world_bible.assert_not_called()
+    council.strangeness.run.assert_not_called()
+    council.sensory.run.assert_not_called()
+    # Revisions drop back to the default model; only NON-EARTH keeps Opus throughout.
+    assert council.writer.revise.call_args.kwargs["model"] is None
+
+
+def test_secondary_still_makes_the_reviewers_canon_aware():
+    """A canon sheet exists, so findings get bucketed [CRAFT]/[WORLD] as on NON-EARTH."""
+    council = _secondary_council()
+
+    council._run_inner(idea="i", target_length="1k", target_audience="a")
+
+    assert council.engine.run.call_args.kwargs["canon_sheet"] == "CANON"
+    assert council.consistency.run.call_args.kwargs["canon_sheet"] == "CANON"
+    assert council.planner.plan_revision.call_args.kwargs["canon_aware"] is True
+
+
+def test_world_class_override_beats_the_planners_tag():
+    council = _secondary_council()
+
+    _, _, world_class, _, _, _ = council._run_inner(
+        idea="i", target_length="1k", target_audience="a",
+        world_class_override=wc.EARTH)
+
+    assert world_class == wc.EARTH
+    council.world_builder.run.assert_not_called()
+
+
+def test_run_rejects_an_unknown_world_class_before_spending_anything():
+    council = WritingCouncil()
+    council._run_inner = MagicMock()
+    try:
+        council.run(idea="i", target_length="1k", target_audience="a",
+                    world_class="Mars")
+    except ValueError as exc:
+        assert "Mars" in str(exc)
+    else:
+        raise AssertionError("expected a ValueError")
+    council._run_inner.assert_not_called()
+
+
+def test_run_returns_world_class_alongside_the_legacy_flag():
+    council = WritingCouncil()
+    council._run_inner = MagicMock(
+        return_value=("plan", "<<<SECTION 1>>>\nD.", wc.SECONDARY, "CANON", "", ""))
+    council._run_middle = MagicMock(return_value="<<<SECTION 1>>>\nM.")
+    council._run_prose_pass = MagicMock(return_value="<<<SECTION 1>>>\nP.")
+
+    result = council.run(idea="i", target_length="1k", target_audience="a")
+
+    assert result["world_class"] == wc.SECONDARY
+    # non_earth stays a NON-EARTH-only flag: the server, CLI, and UI all read it.
+    assert result["non_earth"] is False

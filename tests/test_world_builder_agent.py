@@ -30,3 +30,24 @@ def test_run_handles_missing_bible_header_gracefully():
         result = agent.run(idea="i", plan="p")
     assert "Rule." in result["canon_sheet"]
     assert result["world_bible"] == ""
+
+
+def test_canon_only_omits_the_bible_and_says_so():
+    """SECONDARY tier: rules without a sensory bank the writer does not need."""
+    agent = WorldBuilderAgent()
+    with patch.object(agent, "_call_claude",
+                      return_value="=== CANON SHEET ===\nHealed wood fails by spring.") as m:
+        out = agent.run(idea="i", plan="p", canon_only=True)
+    system, user = m.call_args.args[0], m.call_args.args[1]
+    assert "SECONDARY" in system
+    assert "Do NOT produce a world bible" in system
+    assert "WORLD BIBLE" not in user
+    assert out["canon_sheet"] == "Healed wood fails by spring."
+    assert out["world_bible"] == ""
+
+
+def test_full_build_still_asks_for_both_blocks():
+    agent = WorldBuilderAgent()
+    with patch.object(agent, "_call_claude", return_value="=== CANON SHEET ===\nc") as m:
+        agent.run(idea="i", plan="p")
+    assert "=== WORLD BIBLE ===" in m.call_args.args[0]

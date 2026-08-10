@@ -9,6 +9,7 @@ from flask import Flask, jsonify, request, send_file
 from document_writer import save_as_manuscript
 from orchestrator import WritingCouncil
 from story_intake import load_story_text
+from world_class import normalize as normalize_world_class
 
 app = Flask(__name__, static_folder="static")
 
@@ -74,6 +75,12 @@ def run():
                 # server fault; load_story_text's message already says which.
                 return jsonify({"error": str(exc)}), 400
 
+        # A bad tier is a user mistake like a bad file extension, not a server fault.
+        try:
+            world_class = normalize_world_class(data.get("world_class", "") or "auto")
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
         has_source = bool(source_story)
         council = WritingCouncil()
         result = council.run(
@@ -91,10 +98,12 @@ def run():
             source_filename=source_filename,
             rewrite_mode=data.get("rewrite_mode", ""),
             rewrite_notes=data.get("rewrite_notes", ""),
+            world_class=world_class,
         )
         return jsonify({
             "story": result["story"],
             "log": result["log"],
+            "world_class": result.get("world_class", ""),
             "non_earth": result.get("non_earth", False),
             "planning_details": result.get("planning_details", ""),
             "constraint_check": result.get("constraint_check"),

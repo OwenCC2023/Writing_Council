@@ -24,6 +24,7 @@ from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
 from story_intake import bump_title_version, word_count
+import world_class as wc
 
 LOGS_DIR = Path(__file__).parent / "logs"
 
@@ -120,6 +121,7 @@ class WritingCouncil:
         rewrite_mode: str = "",
         rewrite_notes: str = "",
         source_filename: str = "",
+        world_class: str = wc.AUTO,
     ) -> dict:
         """Run the full outer loop: Inner → Middle → prose-cleanup pass(es).
 
@@ -159,7 +161,14 @@ class WritingCouncil:
             source_filename: Optional filename of the uploaded source_story, used
                 only as a title fallback (its stem) when neither the user nor the
                 intake brief supplies one.
+            world_class: ``"auto"`` (default) lets the planner classify the world as
+                EARTH, SECONDARY, or NON-EARTH; passing a class overrides it. The tier
+                decides what gets precomputed: EARTH nothing, SECONDARY a canon sheet,
+                NON-EARTH a canon sheet plus a world bible, an Opus writer on every
+                pass, and the two strangeness reviewers. Override when the planner
+                misjudges: a NON-EARTH call on a familiar world is expensive.
         """
+        world_class_override = wc.normalize(world_class)
         self._log = []
         LOGS_DIR.mkdir(exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -211,21 +220,22 @@ class WritingCouncil:
         # and marks the existing draft, seeding the inner loop instead).
         if mode == "revise":
             print("[outer] Starting inner loop (revise: seeded with the uploaded draft)...")
-            plan, story, non_earth, canon_sheet, world_bible, planning_details = \
+            plan, story, world_class, canon_sheet, world_bible, planning_details = \
                 self._run_revise_setup(
                     brief=brief_text, source_story=source_story,
                     rewrite_notes=rewrite_notes, target_length=target_length,
                     target_audience=target_audience, world_rules=world_rules,
                     framework=framework, style=style, title=title,
-                    constraint=constraint, idea=idea, image=image)
-            plan, story, non_earth, canon_sheet, world_bible, _ = self._run_inner(
-                seeded=True, plan=plan, story=story, non_earth=non_earth,
+                    constraint=constraint, idea=idea, image=image,
+                    world_class_override=world_class_override)
+            plan, story, world_class, canon_sheet, world_bible, _ = self._run_inner(
+                seeded=True, plan=plan, story=story, world_class=world_class,
                 canon_sheet=canon_sheet, world_bible=world_bible,
                 target_length=target_length, target_audience=target_audience,
                 constraint=constraint, label="outer.inner")
         else:
             print("[outer] Starting inner loop (initial write)...")
-            plan, story, non_earth, canon_sheet, world_bible, planning_details = \
+            plan, story, world_class, canon_sheet, world_bible, planning_details = \
                 self._run_inner(
                     idea=idea,
                     target_length=target_length,
@@ -241,12 +251,13 @@ class WritingCouncil:
                     rewrite_notes=rewrite_notes,
                     source_words=words,
                     label="outer.inner",
+                    world_class_override=world_class_override,
                 )
 
         # Middle
         print("[outer] Starting middle loop...")
         story = self._run_middle(plan, story, target_audience,
-                                 non_earth=non_earth, canon_sheet=canon_sheet,
+                                 world_class=world_class, canon_sheet=canon_sheet,
                                  world_bible=world_bible, constraint=constraint,
                                  target_length=target_length)
 
@@ -255,12 +266,15 @@ class WritingCouncil:
             print(f"[outer] Starting prose-cleanup pass {i + 1}/{prose_passes}...")
             story = self._run_prose_pass(
                 plan, story, top_n=prose_top_n, label=f"prose.{i + 1}",
-                non_earth=non_earth, canon_sheet=canon_sheet, world_bible=world_bible,
+                world_class=world_class, canon_sheet=canon_sheet, world_bible=world_bible,
                 constraint=constraint, target_length=target_length)
 
         # Section markers survive until here (the prose passes need them); strip last.
         story = self._strip_section_markers(story)
-        return {"story": story, "non_earth": non_earth,
+        return {"story": story,
+                "world_class": world_class,
+                # Kept alongside world_class: the server, CLI, and UI all read it.
+                "non_earth": wc.is_non_earth(world_class),
                 "planning_details": planning_details,
                 "constraint_check": check_constraint(constraint, story),
                 "intake_brief": brief_text,
@@ -298,10 +312,11 @@ class WritingCouncil:
                           target_length: str, target_audience: str, world_rules: str,
                           framework: str, style: str, title: str, constraint: str,
                           idea: str, image: str | list = "",
-                          label: str = "revise") -> tuple:
+                          label: str = "revise",
+                          world_class_override: str = wc.AUTO) -> tuple:
         """Plan the existing story, classify it, world-build, and mark sections.
 
-        Returns (plan, marked_story, non_earth, canon_sheet, world_bible,
+        Returns (plan, marked_story, world_class, canon_sheet, world_bible,
         planning_details). Kept out of _run_inner, whose initial branch owns
         classification for fresh runs and would reset these values.
         """
@@ -331,14 +346,18 @@ class WritingCouncil:
             source_story=source_story, plan_existing=True,
         )
         self._log_end(result, step=f"{label}.plan")
-        non_earth, plan = self._parse_world_class(result["output"])
+        world_class, plan = self._parse_world_class(result["output"],
+                                                    override=world_class_override)
 
         canon_sheet, world_bible = "", ""
-        if non_earth:
-            print(f"[{label}] NON-EARTH world — running WorldBuilder...")
+        if wc.wants_canon(world_class):
+            canon_only = not wc.wants_bible(world_class)
+            artifacts = "canon sheet only" if canon_only else "canon sheet + world bible"
+            print(f"[{label}] {world_class} world — running WorldBuilder ({artifacts})...")
             self._log_start(f"{label}.world_builder", "WorldBuilderAgent",
                             f"idea:\n{idea}\n\nplan:\n{plan}")
-            wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules)
+            wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules,
+                                        canon_only=canon_only)
             self._log_end(wb, step=f"{label}.world_builder")
             canon_sheet, world_bible = wb["canon_sheet"], wb["world_bible"]
             # revise_with_world_bible is deliberately NOT called: it rewrites the
@@ -355,7 +374,7 @@ class WritingCouncil:
                       step=f"{label}.sectionize")
         marked_story = sectionize(source_story, anchors, section_count)
 
-        return plan, marked_story, non_earth, canon_sheet, world_bible, input_text
+        return plan, marked_story, world_class, canon_sheet, world_bible, input_text
 
     # ------------------------------------------------------------------
     # Inner loop: 1 → 2 → (4∥3) → 1(plan_revision) → 2
@@ -383,7 +402,7 @@ class WritingCouncil:
         story: str = None,
         middle_feedbacks: list = None,
         label: str = "inner",
-        non_earth: bool = False,
+        world_class: str = wc.EARTH,
         canon_sheet: str = "",
         world_bible: str = "",
         brief: str = "",
@@ -391,8 +410,9 @@ class WritingCouncil:
         rewrite_notes: str = "",
         source_words: int = 0,
         seeded: bool = False,
+        world_class_override: str = wc.AUTO,
     ) -> tuple:
-        """Returns (plan, story, non_earth, canon_sheet, world_bible, planning_details)."""
+        """Returns (plan, story, world_class, canon_sheet, world_bible, planning_details)."""
 
         write_max_tokens = max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS)
 
@@ -404,7 +424,7 @@ class WritingCouncil:
             # No plan call, no write call — start at the checker fan-out.
             print(f"[{label}] Seeded with an existing draft; skipping the initial write.")
         elif idea is not None:
-            non_earth, canon_sheet, world_bible = False, "", ""
+            world_class, canon_sheet, world_bible = wc.EARTH, "", ""
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
             image_desc = ", ".join(image) if isinstance(image, list) else image
@@ -449,16 +469,20 @@ class WritingCouncil:
             )
             self._log_end(result, step=f"{label}.plan")
             plan = result["output"]
-            non_earth, plan = self._parse_world_class(plan)
+            world_class, plan = self._parse_world_class(plan, override=world_class_override)
 
-            if non_earth:
-                print(f"[{label}] NON-EARTH world — running WorldBuilder...")
+            if wc.wants_canon(world_class):
+                canon_only = not wc.wants_bible(world_class)
+                artifacts = "canon sheet only" if canon_only else "canon sheet + world bible"
+                print(f"[{label}] {world_class} world — running WorldBuilder ({artifacts})...")
                 self._log_start(f"{label}.world_builder", "WorldBuilderAgent",
                                 f"idea:\n{idea}\n\nplan:\n{plan}")
-                wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules)
+                wb = self.world_builder.run(idea=idea, plan=plan, world_rules=world_rules,
+                                            canon_only=canon_only)
                 self._log_end(wb, step=f"{label}.world_builder")
                 canon_sheet, world_bible = wb["canon_sheet"], wb["world_bible"]
 
+            if wc.wants_bible(world_class):
                 print(f"[{label}] Revising plan against the world bible...")
                 self._log_start(f"{label}.plan_bible_revision", "PlanningAgent",
                                 f"plan:\n{plan}\n\nworld_bible:\n{world_bible}")
@@ -503,7 +527,7 @@ class WritingCouncil:
             )
             write_result = self.writer.revise(
                 plan=plan, story=story, feedback=pre_write_plan,
-                model=(INITIAL_DRAFT_MODEL if non_earth else None),
+                model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
                 canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
                 max_tokens=write_max_tokens)
             self._log_end(write_result, step=f"{label}.write_1")
@@ -520,17 +544,20 @@ class WritingCouncil:
         check_label = (
             f"sections {revised_sections}" if revised_sections is not None else "full story"
         )
+        # Both of these push toward more world-surface. A secondary world's surface is
+        # the reader's own, so they only earn their slots on the top tier.
+        strangeness_on = wc.wants_strangeness_reviewers(world_class)
         print(f"[{label}] Running ConsistencyAgent, AIFailureCheckerAgent, EngineReviewerAgent"
-              f"{', StrangenessReviewerAgent and SensoryQuotaAgent' if non_earth else ''} "
+              f"{', StrangenessReviewerAgent and SensoryQuotaAgent' if strangeness_on else ''} "
               f"in parallel ({check_label})...")
         self._log_start(f"{label}.consistency", "ConsistencyAgent", f"story:\n{check_text}")
         self._log_start(f"{label}.ai_check", "AIFailureCheckerAgent", f"story:\n{check_text}")
         self._log_start(f"{label}.engine", "EngineReviewerAgent", f"story:\n{check_text}")
-        if non_earth:
+        if strangeness_on:
             self._log_start(f"{label}.strangeness", "StrangenessReviewerAgent",
                             f"story:\n{check_text}")
             self._log_start(f"{label}.sensory", "SensoryQuotaAgent", f"story:\n{check_text}")
-        workers = 5 if non_earth else 3
+        workers = 5 if strangeness_on else 3
         with ThreadPoolExecutor(max_workers=workers) as executor:
             f_cons = executor.submit(self.consistency.run, story=check_text,
                                      canon_sheet=canon_sheet)
@@ -539,9 +566,9 @@ class WritingCouncil:
             f_eng = executor.submit(self.engine.run, plan=plan, story=check_text,
                                     canon_sheet=canon_sheet)
             f_str = executor.submit(self.strangeness.run, story=check_text,
-                                    canon_sheet=canon_sheet) if non_earth else None
+                                    canon_sheet=canon_sheet) if strangeness_on else None
             f_sen = executor.submit(self.sensory.run, story=check_text,
-                                    canon_sheet=canon_sheet) if non_earth else None
+                                    canon_sheet=canon_sheet) if strangeness_on else None
             cons_result = f_cons.result()
             ai_result = f_ai.result()
             eng_result = f_eng.result()
@@ -570,7 +597,7 @@ class WritingCouncil:
             story=story,
             plan=plan,
             feedbacks=feedbacks,
-            non_earth=non_earth,
+            canon_aware=wc.wants_canon(world_class),
         )
         self._log_end(result, step=f"{label}.plan_revision_2")
         revision_plan = result["output"]
@@ -583,19 +610,19 @@ class WritingCouncil:
         )
         result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
-            model=(INITIAL_DRAFT_MODEL if non_earth else None),
+            model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
             max_tokens=write_max_tokens)
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
-        return plan, story, non_earth, canon_sheet, world_bible, planning_details
+        return plan, story, world_class, canon_sheet, world_bible, planning_details
 
     # ------------------------------------------------------------------
     # Middle loop: 5/6/7/8 → [1.plan_revision] → Inner(both 1s plan_revision)
     # ------------------------------------------------------------------
     def _run_middle(self, plan: str, story: str, target_audience: str,
-                    non_earth: bool = False, canon_sheet: str = "",
+                    world_class: str = wc.EARTH, canon_sheet: str = "",
                     world_bible: str = "", constraint: str = "",
                     target_length: str = "") -> str:
         # 5, 6, 7, 8 — all four reviewers in parallel
@@ -642,7 +669,7 @@ class WritingCouncil:
             story=story,
             middle_feedbacks=middle_feedbacks,
             label="middle.inner",
-            non_earth=non_earth,
+            world_class=world_class,
             canon_sheet=canon_sheet,
             world_bible=world_bible,
             constraint=constraint,
@@ -654,7 +681,7 @@ class WritingCouncil:
     # Final prose-cleanup pass: (4 ∥ 3_prose) → 1(plan_revision_prose) → 2
     # ------------------------------------------------------------------
     def _run_prose_pass(self, plan: str, story: str, top_n: int = 5,
-                        label: str = "prose", non_earth: bool = False,
+                        label: str = "prose", world_class: str = wc.EARTH,
                         canon_sheet: str = "", world_bible: str = "",
                         constraint: str = "", target_length: str = "") -> str:
         """One line-level polish pass. Runs consistency + prose-mode checker in
@@ -689,7 +716,7 @@ class WritingCouncil:
             plan=plan,
             prose_feedback=prose_result["output"],
             consistency_feedback=cons_result["output"],
-            non_earth=non_earth,
+            canon_aware=wc.wants_canon(world_class),
             variance_feedback=var_result["output"],
         )
         self._log_end(plan_result, step=f"{label}.plan_revision")
@@ -699,20 +726,26 @@ class WritingCouncil:
         self._log_start(f"{label}.write", "WriterAgent")
         write_result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
-            model=(INITIAL_DRAFT_MODEL if non_earth else None),
+            model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
             max_tokens=max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS))
         self._log_end(write_result, step=f"{label}.write")
         return write_result["output"]
 
     @staticmethod
-    def _parse_world_class(plan: str) -> tuple:
-        """Return (non_earth, plan_without_tag). Missing tag → (False, plan)."""
-        m = re.search(r'<<<WORLD_CLASS:\s*(EARTH|NON-EARTH)>>>\n?', plan, re.IGNORECASE)
+    def _parse_world_class(plan: str, override: str = wc.AUTO) -> tuple:
+        """Return (world_class, plan_without_tag).
+
+        A missing or unreadable tag falls back to EARTH, the tier that buys nothing.
+        A non-auto override wins outright — but the tag is still stripped either way,
+        since the writer must never see it, whoever decided the class.
+        """
+        m = re.search(r'<<<WORLD_CLASS:\s*([A-Z_-]+)>>>\n?', plan, re.IGNORECASE)
         if not m:
-            return False, plan
-        non_earth = m.group(1).upper() == "NON-EARTH"
-        return non_earth, plan[:m.start()] + plan[m.end():]
+            return (wc.EARTH if override == wc.AUTO else override), plan
+        parsed = wc.parse_tag(m.group(1))
+        resolved = parsed if override == wc.AUTO else override
+        return resolved, plan[:m.start()] + plan[m.end():]
 
     @staticmethod
     def _strip_section_markers(story: str) -> str:

@@ -4,6 +4,7 @@ from pathlib import Path
 from orchestrator import WritingCouncil
 from document_writer import save_as_manuscript, resolve_output_path
 from story_intake import load_story_text
+from world_class import normalize as normalize_world_class
 
 
 def _load(path: str, fallback: str) -> str:
@@ -24,6 +25,12 @@ SOURCE_STORY_PATH = ""   # path to an existing .txt/.md/.docx story, or "" for a
 REWRITE_MODE = ""        # "reimagine" (new story on the original's bones) or
                          # "revise" (edit the original prose). "" defaults to reimagine.
 REWRITE_NOTES = ""       # e.g. "cut it to 3,000 words", "second person", "darker ending"
+
+WORLD_CLASS = "auto"     # "auto" lets the planner classify. Override with "EARTH",
+                         # "SECONDARY" (magic in a real city, alt-history, near-future —
+                         # gets a canon sheet), or "NON-EARTH" (another planet, deep past —
+                         # also gets a world bible, an Opus writer on every pass, and the
+                         # two strangeness reviewers, at roughly 3-5x the cost).
 # With SOURCE_STORY_PATH set, leaving TARGET_LENGTH blank keeps the original's length.
 TARGET_LENGTH = "8,000 words"
 TARGET_AUDIENCE = "Adult sci-fi readers"
@@ -58,6 +65,14 @@ def main() -> None:
         print(f"Could not read SOURCE_STORY_PATH: {exc}")
         sys.exit(1)
 
+    try:
+        normalize_world_class(WORLD_CLASS)
+    except ValueError as exc:
+        # Caught here rather than mid-run: the council would otherwise raise it
+        # after the intake call has already been billed.
+        print(f"Bad WORLD_CLASS: {exc}")
+        sys.exit(1)
+
     council = WritingCouncil()
     result = council.run(
         idea=_load(IDEA_PATH, IDEA),
@@ -72,6 +87,7 @@ def main() -> None:
         source_filename=SOURCE_STORY_PATH,
         rewrite_mode=REWRITE_MODE,
         rewrite_notes=REWRITE_NOTES,
+        world_class=WORLD_CLASS,
         # image="path/to/world_reference.png",       # optional — local file or http/https URL;
         #                                            # the planner will deduce world rules from it
     )
@@ -85,6 +101,7 @@ def main() -> None:
         details=result.get("planning_details"),
     )
     print(f"Saved manuscript: {path}")
+    print(f"World class: {result.get('world_class', '')}")
 
     # The brief the intake agent extracted from the original story
     if result.get("intake_brief"):

@@ -116,6 +116,17 @@ describe('run payload', () => {
     expect(sent.body.rewrite_notes).toBe('darker ending');
   });
 
+  it('defaults world_class to auto and sends the selected tier', async () => {
+    win.document.getElementById('title').value = 'A Fresh Title';
+    win.document.getElementById('author').value = 'A. Writer';
+    win.document.getElementById('idea').value = 'an idea';
+    expect(win.document.getElementById('world_class').value).toBe('auto');
+    win.document.getElementById('world_class').value = 'SECONDARY';
+    win.document.getElementById('run-btn').click();
+    await vi.waitFor(() => expect(sent).not.toBeNull());
+    expect(sent.body.world_class).toBe('SECONDARY');
+  });
+
   it('sends only the most recent story when two are attached in a row', async () => {
     await attachStory(win, 'first.txt', 'The first draft.');
     await attachStory(win, 'second.txt', 'The second draft.');
