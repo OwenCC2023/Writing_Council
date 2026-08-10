@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 from orchestrator import WritingCouncil
 from agents.base_agent import INITIAL_DRAFT_MODEL
+from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 
 
 def test_initial_inner_runs_plan_and_write_on_opus():
@@ -56,7 +57,9 @@ def test_run_prose_pass_calls_agents_in_order():
         non_earth=False)
     council.writer.revise.assert_called_once_with(
         plan="plan", story="story", feedback="revplan",
-        model=None, canon_sheet="", world_bible="", constraint="")
+        model=None, canon_sheet="", world_bible="", constraint="",
+        # No target_length here, so the budget resolves to the unchanged floor.
+        max_tokens=INITIAL_WRITE_MAX_TOKENS)
 
 
 def test_run_applies_one_prose_pass_and_strips_markers():

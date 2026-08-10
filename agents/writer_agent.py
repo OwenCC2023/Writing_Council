@@ -208,7 +208,10 @@ class WriterAgent(BaseAgent):
                 prompt = self._build_section_revision_prompt(
                     plan, {k: sections[k] for k in valid}, valid
                 )
-                raw = self._call_claude(REVISION_SYSTEM_PROMPT + world, prompt, model=model)
+                # A multi-section revision on a long draft can exceed the 8192
+                # default, so this path honors the caller's budget too.
+                raw = self._call_claude(REVISION_SYSTEM_PROMPT + world, prompt, model=model,
+                                        max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS)
                 revised = self._parse_sections(raw)
                 sections = self._apply_section_revisions(sections, revised)
                 # Only set revised_section_nums if there were no structural ops that

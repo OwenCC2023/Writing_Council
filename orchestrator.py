@@ -208,7 +208,7 @@ class WritingCouncil:
                     rewrite_notes=rewrite_notes, target_length=target_length,
                     target_audience=target_audience, world_rules=world_rules,
                     framework=framework, style=style, title=title,
-                    constraint=constraint, idea=idea)
+                    constraint=constraint, idea=idea, image=image)
             plan, story, non_earth, canon_sheet, world_bible, _ = self._run_inner(
                 seeded=True, plan=plan, story=story, non_earth=non_earth,
                 canon_sheet=canon_sheet, world_bible=world_bible,
@@ -236,7 +236,8 @@ class WritingCouncil:
         print("[outer] Starting middle loop...")
         story = self._run_middle(plan, story, target_audience,
                                  non_earth=non_earth, canon_sheet=canon_sheet,
-                                 world_bible=world_bible, constraint=constraint)
+                                 world_bible=world_bible, constraint=constraint,
+                                 target_length=target_length)
 
         # Final prose-cleanup pass(es)
         for i in range(prose_passes):
@@ -244,7 +245,7 @@ class WritingCouncil:
             story = self._run_prose_pass(
                 plan, story, top_n=prose_top_n, label=f"prose.{i + 1}",
                 non_earth=non_earth, canon_sheet=canon_sheet, world_bible=world_bible,
-                constraint=constraint)
+                constraint=constraint, target_length=target_length)
 
         # Section markers survive until here (the prose passes need them); strip last.
         story = self._strip_section_markers(story)
@@ -258,20 +259,31 @@ class WritingCouncil:
                 "log": list(self._log)}
 
     def _count_plan_sections(self, plan: str) -> int:
-        """How many numbered sections the plan declares. At least 1."""
-        nums = re.findall(r'^\s*(?:SECTION\s+)?(\d+)[.:)]', plan, re.MULTILINE | re.IGNORECASE)
+        """How many sections the plan declares. At least 1.
+
+        Prefers explicit ``SECTION <n>`` headers wherever they appear in a line,
+        so markdown decoration (``**SECTION 1:**``, ``## SECTION 1``) still
+        counts and numbered sub-lists inside a section cannot inflate the total.
+        Falls back to line-start numbering for plans that use bare ``1.`` heads.
+        """
+        keyed = re.findall(r'SECTION\s+(\d+)', plan, re.IGNORECASE)
+        if keyed:
+            return max(1, len(set(keyed)))
+        nums = re.findall(r'^\s*(\d+)[.:)]', plan, re.MULTILINE)
         return max(1, len(set(nums)))
 
     def _run_revise_setup(self, brief: str, source_story: str, rewrite_notes: str,
                           target_length: str, target_audience: str, world_rules: str,
                           framework: str, style: str, title: str, constraint: str,
-                          idea: str, label: str = "revise") -> tuple:
+                          idea: str, image: str | list = "",
+                          label: str = "revise") -> tuple:
         """Plan the existing story, classify it, world-build, and mark sections.
 
         Returns (plan, marked_story, non_earth, canon_sheet, world_bible,
         planning_details). Kept out of _run_inner, whose initial branch owns
         classification for fresh runs and would reset these values.
         """
+        image_desc = ", ".join(image) if isinstance(image, list) else image
         input_text = (
             f"title: {title or '(none)'}\n"
             f"rewrite_mode: revise\n"
@@ -282,7 +294,8 @@ class WritingCouncil:
             f"world_rules: {world_rules or '(none)'}\n"
             f"framework: {framework or '(none)'}\n"
             f"style: {style or '(none)'}\n"
-            f"constraint: {constraint or '(none)'}"
+            f"constraint: {constraint or '(none)'}\n"
+            f"image: {image_desc or '(none)'}"
         )
 
         print(f"[{label}] Running PlanningAgent over the existing story...")
@@ -290,6 +303,7 @@ class WritingCouncil:
         result = self.planner.run(
             idea=idea, target_length=target_length, target_audience=target_audience,
             world_rules=world_rules, framework=framework, style=style,
+            image=image,
             model=INITIAL_DRAFT_MODEL, title=title, constraint=constraint,
             brief=brief, rewrite_notes=rewrite_notes,
             source_story=source_story, plan_existing=True,
@@ -537,7 +551,8 @@ class WritingCouncil:
         result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if non_earth else None),
-            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
+            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
+            max_tokens=write_max_tokens)
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
@@ -548,7 +563,8 @@ class WritingCouncil:
     # ------------------------------------------------------------------
     def _run_middle(self, plan: str, story: str, target_audience: str,
                     non_earth: bool = False, canon_sheet: str = "",
-                    world_bible: str = "", constraint: str = "") -> str:
+                    world_bible: str = "", constraint: str = "",
+                    target_length: str = "") -> str:
         # 5, 6, 7, 8 — all four reviewers in parallel
         print("[middle] Running PeerWriterAgent, EditorAgent, MarketingAgent, "
               "AudienceAgent in parallel...")
@@ -597,6 +613,7 @@ class WritingCouncil:
             canon_sheet=canon_sheet,
             world_bible=world_bible,
             constraint=constraint,
+            target_length=target_length,
         )
         return story
 
@@ -606,7 +623,7 @@ class WritingCouncil:
     def _run_prose_pass(self, plan: str, story: str, top_n: int = 5,
                         label: str = "prose", non_earth: bool = False,
                         canon_sheet: str = "", world_bible: str = "",
-                        constraint: str = "") -> str:
+                        constraint: str = "", target_length: str = "") -> str:
         """One line-level polish pass. Runs consistency + prose-mode checker in
         parallel, forces all prose findings into a section-revision plan, and
         applies it. Returns the revised story (markers intact)."""
@@ -641,7 +658,8 @@ class WritingCouncil:
         write_result = self.writer.revise(
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if non_earth else None),
-            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint)
+            canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
+            max_tokens=max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS))
         self._log_end(write_result, step=f"{label}.write")
         return write_result["output"]
 

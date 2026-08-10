@@ -94,3 +94,16 @@ def test_revise_fallback_honors_an_explicit_budget():
     with patch.object(agent, "_call_claude", return_value="story") as m:
         agent.revise(plan="p", story="no markers here", feedback="f", max_tokens=28000)
     assert m.call_args.kwargs["max_tokens"] == 28000
+
+
+def test_section_revision_honors_an_explicit_budget():
+    """Section-targeted path: a multi-section revision can exceed the 8192 default."""
+    agent = WriterAgent()
+    story = "<<<SECTION 1>>>\nalpha\n\n<<<SECTION 2>>>\nbeta"
+    feedback = ("=== STRUCTURAL OPERATIONS ===\nNONE\n"
+                "=== SECTION REVISIONS ===\nSECTION 1: tighten\nSECTION 2: cut\n"
+                "=== GENERAL NOTES ===\nNONE")
+    with patch.object(agent, "_call_claude",
+                      return_value="<<<SECTION 1>>>\na\n\n<<<SECTION 2>>>\nb") as m:
+        agent.revise(plan="p", story=story, feedback=feedback, max_tokens=28000)
+    assert m.call_args.kwargs["max_tokens"] == 28000
