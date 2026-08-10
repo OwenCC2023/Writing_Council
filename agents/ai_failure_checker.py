@@ -112,7 +112,10 @@ class AIFailureCheckerAgent(BaseAgent):
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(failure_modes=failure_modes)
         user_prompt = f"STORY:\n{story}\n\nIdentify all AI writing failure modes present in this story."
 
-        output = self._call_claude(with_canon(system_prompt, canon_sheet), user_prompt)
+        # lower_authority=False, like PeerWriter: this agent's whole job is tics, and
+        # authority-lowering near world-elements taught it to excuse them as intentional.
+        output = self._call_claude(
+            with_canon(system_prompt, canon_sheet, lower_authority=False), user_prompt)
         return {"agent": "AIFailureCheckerAgent", "output": output}
 
     def run_prose(self, story: str, top_n: int = 5,
@@ -127,5 +130,6 @@ class AIFailureCheckerAgent(BaseAgent):
             f"STORY:\n{story}\n\n"
             f"Identify the {top_n} most egregious surviving prose violations."
         )
-        output = self._call_claude(with_canon(system_prompt, canon_sheet), user_prompt)
+        output = self._call_claude(
+            with_canon(system_prompt, canon_sheet, lower_authority=False), user_prompt)
         return {"agent": "AIFailureCheckerAgent", "output": output}

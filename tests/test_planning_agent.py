@@ -149,3 +149,26 @@ def test_plan_existing_adds_addendum_and_source_story():
 def test_plan_existing_addendum_overrides_non_earth_chunking():
     assert "MORE, SMALLER" in PLAN_EXISTING_ADDENDUM or "more, smaller" in PLAN_EXISTING_ADDENDUM
     assert "scene structure" in PLAN_EXISTING_ADDENDUM
+
+
+def test_plan_revision_prose_threads_variance_feedback_as_force_fixed():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="x") as m:
+        agent.plan_revision_prose(
+            story="<<<SECTION 1>>>\nHi.", plan="p",
+            prose_feedback="findings", consistency_feedback="cons",
+            variance_feedback="temperature readings x38",
+        )
+    user_prompt = m.call_args.args[1]
+    assert "temperature readings x38" in user_prompt
+    assert "REPEATED-TECHNIQUE FINDINGS (every one MUST be fixed" in user_prompt
+    # The fix for a repeated move is removal, not a hedge bolted onto it.
+    assert "never by adding a qualifier to it" in user_prompt
+
+
+def test_plan_revision_prose_omits_variance_block_when_empty():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude", return_value="x") as m:
+        agent.plan_revision_prose(story="s", plan="p", prose_feedback="f",
+                                  consistency_feedback="c")
+    assert "REPEATED-TECHNIQUE" not in m.call_args.args[1]

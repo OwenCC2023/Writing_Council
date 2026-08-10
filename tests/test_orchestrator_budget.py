@@ -37,6 +37,8 @@ def _council():
     council.ai_checker.run_prose = MagicMock(
         return_value={"agent": "AIFailureCheckerAgent", "output": "pr"})
     council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
+    council.variance.run = MagicMock(
+        return_value={"agent": "VarianceReviewerAgent", "output": "v"})
     council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
     council.planner.plan_revision_prose = MagicMock(
         return_value={"agent": "PlanningAgent", "output": "pp"})

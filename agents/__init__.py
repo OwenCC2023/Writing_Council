@@ -10,6 +10,7 @@ from .world_builder_agent import WorldBuilderAgent
 from .strangeness_agent import StrangenessReviewerAgent
 from .sensory_agent import SensoryQuotaAgent
 from .engine_agent import EngineReviewerAgent
+from .variance_agent import VarianceReviewerAgent
 from .intake_agent import IntakeAgent, parse_brief, BRIEF_FIELDS
 from .sectionizer_agent import SectionizerAgent, sectionize
 
@@ -26,6 +27,7 @@ __all__ = [
     "StrangenessReviewerAgent",
     "SensoryQuotaAgent",
     "EngineReviewerAgent",
+    "VarianceReviewerAgent",
     "IntakeAgent",
     "parse_brief",
     "BRIEF_FIELDS",

@@ -21,3 +21,23 @@ def test_run_prose_prompt_carries_scope_framing_and_top_n():
     assert "OUT OF SCOPE" in system_prompt           # structural exclusion
     assert "3" in system_prompt                      # top_n injected into system
     assert "3" in user_prompt                        # and into user ask
+
+
+def _system_prompt_with_canon(method_name, tmp_path):
+    modes = tmp_path / "modes.md"
+    modes.write_text("TAXONOMY", encoding="utf-8")
+    agent = AIFailureCheckerAgent()
+    with patch.object(agent, "_call_claude", return_value="out") as m:
+        getattr(agent, method_name)(story="s", failure_modes_path=modes,
+                                    canon_sheet="CANON")
+    return m.call_args.args[0]
+
+
+def test_canon_does_not_lower_this_agents_authority(tmp_path):
+    """Authority-lowering near world-elements taught the tic detector to excuse tics as
+    intentional ("[WORLD] — structural to the story"). It keeps full authority, like
+    PeerWriter."""
+    for method in ("run", "run_prose"):
+        system = _system_prompt_with_canon(method, tmp_path)
+        assert "CANON" in system
+        assert "lower your authority" not in system.lower()
