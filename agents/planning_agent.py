@@ -291,6 +291,38 @@ HARD RULES:
   not a revision-ops list.\
 """
 
+PLAN_FIX_MAX_TOKENS = 16000
+
+LENGTH_FIX_SYSTEM_PROMPT = """\
+You are a story architect correcting one specific defect in a plan you already wrote: its \
+per-section word budgets do not sum to the target length. This has been counted, not \
+estimated — the arithmetic in the message is exact. A writer follows these budgets closely, \
+so a plan budgeted at half the target produces a story at half the target, and no later \
+pass recovers it.
+
+Rewrite the plan so the budgets add up. You have two ways to close the gap, and the right \
+answer is usually both:
+- Give existing sections the weight their beats actually need. A section budgeted at 700 \
+  words that carries a turning point, a reversal, and its cost is under-budgeted; say so \
+  with a bigger number.
+- Add the sections the story is missing. A large shortfall usually means beats were \
+  compressed out — a consequence never dramatised, a middle that jumps, an escalation \
+  stated in summary that should be a scene. Find them and plan them.
+
+Do NOT close the gap by inflating a number you do not intend the writer to use, and do NOT \
+pad: every added word must belong to a beat that causes the next one. If the story genuinely \
+cannot carry the target length, still make the budgets sum to it and say why in one line at \
+the top — do not silently emit budgets that miss again.
+
+Keep everything else about the plan intact: the STORY ENGINE block, the CHARACTERS section, \
+the existing beats and their order, and any CONSTRAINT or PROSE STYLE section. This is a \
+budget correction, not a re-conception.
+
+Output the FULL corrected plan in the same format, and nothing else. State a per-section \
+word budget on every section. Do NOT emit a <<<WORLD_CLASS>>> tag — classification is \
+already done. Do NOT use the "=== STRUCTURAL OPERATIONS ===" diff-ops format.\
+"""
+
 
 class PlanningAgent(BaseAgent):
     """Converts a raw story idea into a detailed section-by-section narrative plan."""
@@ -422,6 +454,35 @@ class PlanningAgent(BaseAgent):
         )
         system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if canon_aware else "")
         output = self._call_claude(system_prompt, user_prompt)
+        return {"agent": "PlanningAgent", "output": output}
+
+    def fix_plan_length(self, plan: str, target_length: str, check: dict,
+                        model: str = None) -> dict:
+        """Re-budget a plan whose per-section word budgets miss the target.
+
+        Args:
+            plan: The plan whose budgets are wrong.
+            target_length: The target the budgets must sum to.
+            check: The ``plan_length.check_plan_length`` result, whose exact counts go
+                into the prompt — the planner is being shown arithmetic, not an opinion.
+            model: Optional model override.
+
+        Returns:
+            A dict with 'agent' and 'output' keys; output is a full narrative plan.
+        """
+        user_prompt = (
+            f"TARGET LENGTH: {target_length}\n\n"
+            f"COUNTED FROM YOUR PLAN: {check['sections']} sections, budgets summing to "
+            f"{check['declared']:,} words — {check['ratio']:.0%} of the "
+            f"{check['target']:,}-word target. The shortfall is "
+            f"{check['target'] - check['declared']:,} words.\n\n"
+            f"PLAN:\n{plan}\n\n"
+            "Rewrite the full plan so the per-section budgets sum to the target."
+        )
+        # A corrected plan is longer than the one it replaces — that is the whole point —
+        # so the 8192 default would truncate exactly the sections being added.
+        output = self._call_claude(LENGTH_FIX_SYSTEM_PROMPT, user_prompt, model=model,
+                                   max_tokens=PLAN_FIX_MAX_TOKENS)
         return {"agent": "PlanningAgent", "output": output}
 
     def revise_with_world_bible(self, plan: str, world_bible: str,

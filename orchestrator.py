@@ -23,6 +23,7 @@ from agents.intake_agent import IntakeAgent, parse_brief
 from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
+from plan_length import check_plan_length
 from story_intake import bump_title_version, word_count
 import world_class as wc
 
@@ -492,12 +493,18 @@ class WritingCouncil:
                 self._log_end(rev, step=f"{label}.plan_bible_revision")
                 plan = rev["output"]
 
+            # Count the plan's budgets before writing to them. The writer follows this
+            # plan closely, so a plan budgeted at 41% of target produces a story at 41%
+            # of target and no later pass recovers it. Checked here, after any bible
+            # revision, because this is the plan the writer actually receives.
+            plan = self._enforce_plan_length(plan, target_length, label)
+
             print(f"[{label}] Running WriterAgent (initial write)...")
             self._log_start(f"{label}.write_1", "WriterAgent", f"plan:\n{plan}")
             write_result = self.writer.run(
                 plan=plan, model=INITIAL_DRAFT_MODEL,
                 canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
-                max_tokens=write_max_tokens)
+                max_tokens=write_max_tokens, target_length=target_length)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
             revised_sections = write_result.get("revised_sections")
@@ -529,7 +536,7 @@ class WritingCouncil:
                 plan=plan, story=story, feedback=pre_write_plan,
                 model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
                 canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
-                max_tokens=write_max_tokens)
+                max_tokens=write_max_tokens, target_length=target_length)
             self._log_end(write_result, step=f"{label}.write_1")
             story = write_result["output"]
             revised_sections = write_result.get("revised_sections")
@@ -612,7 +619,7 @@ class WritingCouncil:
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
-            max_tokens=write_max_tokens)
+            max_tokens=write_max_tokens, target_length=target_length)
         self._log_end(result, step=f"{label}.write_2")
         story = result["output"]
 
@@ -728,9 +735,39 @@ class WritingCouncil:
             plan=plan, story=story, feedback=revision_plan,
             model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
-            max_tokens=max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS))
+            max_tokens=max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS),
+            target_length=target_length)
         self._log_end(write_result, step=f"{label}.write")
         return write_result["output"]
+
+    def _enforce_plan_length(self, plan: str, target_length: str, label: str) -> str:
+        """Return the plan, re-budgeted once if its section budgets miss the target.
+
+        One retry only, and the retry is accepted whatever it returns: a second miss is
+        rarer than a re-plan loop is expensive, and a plan budgeted closer to the target
+        is still better than the one it replaced. No target or no budgets means no
+        opinion, and no call.
+        """
+        check = check_plan_length(plan, target_length)
+        if check is None or check["passed"]:
+            return plan
+
+        print(f"[{label}] Plan budgets sum to {check['declared']:,} of "
+              f"{check['target']:,} words ({check['ratio']:.0%}) across "
+              f"{check['sections']} sections. Re-budgeting...")
+        self._log_start(f"{label}.plan_length_fix", "PlanningAgent",
+                        f"declared: {check['declared']}\ntarget: {check['target']}")
+        result = self.planner.fix_plan_length(
+            plan=plan, target_length=target_length, check=check,
+            model=INITIAL_DRAFT_MODEL)
+        self._log_end(result, step=f"{label}.plan_length_fix")
+
+        fixed = result["output"]
+        recheck = check_plan_length(fixed, target_length)
+        if recheck:
+            print(f"[{label}] Re-budgeted plan: {recheck['declared']:,} words "
+                  f"({recheck['ratio']:.0%} of target) across {recheck['sections']} sections.")
+        return fixed
 
     @staticmethod
     def _parse_world_class(plan: str, override: str = wc.AUTO) -> tuple:

@@ -38,6 +38,24 @@ def _constraint_block(constraint: str) -> str:
         "not be told the rule."
     )
 
+def _length_block(target_length: str) -> str:
+    """Return the appended target-length block, or '' when no target.
+
+    The writer used to know the target only through the plan's per-section budgets. When
+    those budgets were wrong, nothing on the write side could notice.
+    """
+    if not target_length:
+        return ""
+    return (
+        "\n\n---\n"
+        f"TARGET LENGTH: {target_length}. The per-section budgets in the plan should sum "
+        "to roughly this. Write each section to its own budget — that is what adds up to "
+        "the target — rather than tracking a running total. If the plan's budgets clearly "
+        "do not reach the target, follow the plan's beats and give each one the weight it "
+        "needs; do not pad a scene to make a number, and do not compress one to save room."
+    )
+
+
 SYSTEM_PROMPT = """\
 You are a skilled prose writer. You will be given a detailed narrative plan and your job \
 is to write the actual story based on it.
@@ -166,9 +184,9 @@ class WriterAgent(BaseAgent):
 
     def run(self, plan: str, model: str = None,
             canon_sheet: str = "", world_bible: str = "", constraint: str = "",
-            max_tokens: int = None) -> dict:
+            max_tokens: int = None, target_length: str = "") -> dict:
         system_prompt = (SYSTEM_PROMPT + _world_block(canon_sheet, world_bible)
-                         + _constraint_block(constraint))
+                         + _constraint_block(constraint) + _length_block(target_length))
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             "Write the full story based on this plan."
@@ -180,8 +198,9 @@ class WriterAgent(BaseAgent):
 
     def revise(self, plan: str, story: str, feedback: str, model: str = None,
                canon_sheet: str = "", world_bible: str = "", constraint: str = "",
-               max_tokens: int = None) -> dict:
-        world = _world_block(canon_sheet, world_bible) + _constraint_block(constraint)
+               max_tokens: int = None, target_length: str = "") -> dict:
+        world = (_world_block(canon_sheet, world_bible) + _constraint_block(constraint)
+                 + _length_block(target_length))
         sections = self._parse_sections(story)
 
         # No section markers present — fall back to full rewrite.

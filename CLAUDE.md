@@ -156,6 +156,32 @@ Craft insights from `theory-of-the-good-unique-short-story.md`, applied on **eve
   the CLI, and the UI). Non-countable constraints (document-form, second-person) lean on the
   engine reviewer.
 
+## Length (`plan_length.py`)
+
+Same policy as `constraints.py`: anything countable is counted in Python, not trusted to a
+model. One run produced a plan headed `Total: 14,589 words across 20 sections` that then
+enumerated **8 sections budgeted at 6,050 words**; the writer hit that plan to within 2.6%
+and the story came out 44% short. Nothing between the two counted.
+
+- `check_plan_length(plan, target_length, tolerance=0.15)` → `declared` / `target` / `ratio`
+  / `sections` / `passed`, or **`None` when there is nothing to judge** (no parseable target,
+  or a plan with no budgets) — so an unrecognised target behaves exactly as it did before.
+  Budget parsing prefers explicit `Budget: N words` and `standard | N words` entries and
+  falls back to `~Nw` half-budgets only when none are found: both notations appeared in the
+  failing run and summing them would double-count. Lines containing `total` are skipped, or
+  the header line the plan contradicts would be counted as a section budget and mask the bug.
+- `WritingCouncil._enforce_plan_length` runs it in `_run_inner` right before the initial
+  write — after any `revise_with_world_bible`, since that Opus rewrite is the plan the writer
+  actually receives and it carried the bad arithmetic forward verbatim. On a miss it calls
+  `PlanningAgent.fix_plan_length` (Opus, `PLAN_FIX_MAX_TOKENS` 16000 — the corrected plan is
+  *longer*, which the 8192 default would truncate) with the exact counts in the prompt.
+  **One retry, accepted whatever it returns**: a second miss is rarer than a re-plan loop is
+  expensive. A plan that adds up costs no extra call. Skipped on the revise path, where the
+  plan describes an existing draft whose length is the draft's, not the target's.
+- `target_length` now reaches `WriterAgent.run`/`revise` via a `_length_block` (rendered only
+  when non-empty, like `_constraint_block`). The writer previously knew the target only
+  through the plan's budgets, so when those were wrong nothing on the write side could notice.
+
 ## Images
 
 The planner can deduce world rules from reference images (WORLD DEDUCTION section).
