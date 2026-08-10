@@ -27,7 +27,9 @@ billed — never start a real council run just to verify code; the tests mock th
   Outer (Inner → Middle → prose-cleanup passes), Middle (4 reviewers in parallel →
   Inner), Inner (plan → write → parallel checkers → plan_revision → revise). The Inner
   checker fan-out runs Consistency + AIFailure + `EngineReviewerAgent` on every run
-  (`max_workers` 3), plus Strangeness + Sensory on `non_earth` (`max_workers` 5).
+  (`max_workers` 3), plus Strangeness + Sensory on `NON-EARTH` (`max_workers` 5).
+  The prose-cleanup pass runs Consistency + AIFailure(prose) + `VarianceReviewerAgent`
+  (`max_workers` 3) on every run.
 - `agents/` — one class per agent, all subclassing `agents/base_agent.py:BaseAgent`
   (shared Anthropic client; `_call_claude` and `_call_claude_with_image`).
   System prompts live as module-level string constants in each agent file.
@@ -41,7 +43,7 @@ billed — never start a real council run just to verify code; the tests mock th
   `PlanningAgent.run`/`WriterAgent.run` take an optional
   `model` override (falls back to `self.model`); the orchestrator passes
   `INITIAL_DRAFT_MODEL` at those two initial call sites, so on an EARTH run all revisions
-  stay on Sonnet. (On a `non_earth` run the writer is Opus on every pass — see Alien-world path.)
+  stay on Sonnet. (On a `NON-EARTH` run the writer is Opus on every pass — see World tiers.)
 - `ai_writing_failure_modes.md` — taxonomy the `AIFailureCheckerAgent` reviews against;
   injected into its system prompts.
 - Drafts carry `<<<SECTION N>>>` markers so revisions can target sections (diff-style);
@@ -51,38 +53,86 @@ billed — never start a real council run just to verify code; the tests mock th
   inline CSS (dark/light via CSS custom properties on `body.light`) and inline JS.
 - `logs/` — every run writes a full per-step log (`run_<timestamp>.log`).
 
-## Alien-world path (`non_earth`)
+## World tiers (`world_class.py`)
 
-For out-of-distribution worlds (off-Earth, or Earth far from present-day experience —
-far future, deep past), the pipeline front-loads the world so write-time is pure craft.
-Gated entirely on a `non_earth` flag; **an EARTH run is byte-for-byte the base pipeline.**
+Three tiers, split on **sensory ground** — would a reader's body know this room? — not on
+how many rules differ from ours. `world_class.py` holds the constants and one predicate per
+capability (`wants_canon`, `wants_bible`, `wants_opus_writer`,
+`wants_strangeness_reviewers`, `wants_smaller_sections`, `is_non_earth`); no call site
+re-derives a tier by comparing strings. **An EARTH run is byte-for-byte the base pipeline.**
 
-- `PlanningAgent.run` always emits `<<<WORLD_CLASS: EARTH|NON-EARTH>>>` as the first line
-  (classification by distributional distance) and, when NON-EARTH, chunks into more/smaller
-  sections. `WritingCouncil._parse_world_class` reads and strips the tag → `non_earth`.
-- `WorldBuilderAgent` (Opus, runs once when `non_earth`) turns the plan text into a
-  `=== CANON SHEET ===` (short authoritative rules) + `=== WORLD BIBLE ===` (dense sensory
-  detail bank) — canon emitted first so truncation only ever costs the bible tail. Reads the
+| | EARTH | SECONDARY | NON-EARTH |
+|---|---|---|---|
+| canon sheet | — | ✓ | ✓ |
+| world bible + `revise_with_world_bible` | — | — | ✓ |
+| writer on Opus after pass 1 | — | — | ✓ |
+| Strangeness + Sensory reviewers | — | — | ✓ |
+| more/smaller sections | — | — | ✓ |
+| reviewers canon-aware (`with_canon`) | — | ✓ | ✓ |
+
+SECONDARY is magic in a real city, alt-history, near-future Earth, a known fictional
+universe whose furniture is ours. It gets its departure set written down without paying for
+a sensory bible it does not need. Classifying such a world NON-EARTH (which the old binary
+did — see PR #21) buys three Opus calls and two one-way "more world-surface" reviewers on
+material the model already knows.
+
+- `PlanningAgent.run` always emits `<<<WORLD_CLASS: EARTH|SECONDARY|NON-EARTH>>>` as the
+  first line and, on NON-EARTH only, chunks into more/smaller sections.
+  `WritingCouncil._parse_world_class(plan, override=)` reads and strips the tag; a missing
+  or unreadable tag falls back to EARTH, the tier that buys nothing.
+- `run(world_class=...)` overrides the planner — `"auto"` (default), `"EARTH"`,
+  `"SECONDARY"`, `"NON-EARTH"`, normalized by `world_class.normalize` (raises on anything
+  else). Threaded like `constraint`: server `/run` (400 on a bad tier), CLI `WORLD_CLASS`,
+  and a UI select. The tag is stripped either way — the writer never sees it.
+- `WorldBuilderAgent` (Opus, once) turns the plan text into a `=== CANON SHEET ===` (short
+  authoritative rules) + `=== WORLD BIBLE ===` (dense sensory detail bank) — canon emitted
+  first so truncation only ever costs the bible tail. `canon_only=True` (SECONDARY) uses a
+  separate prompt that emits rules and explicitly refuses to write a sensory bank. Reads the
   plan (which already holds any image WORLD DEDUCTION), not raw images. Injects
   `trope_blacklist.md` like `ai_writing_failure_modes.md`.
 - `PlanningAgent.revise_with_world_bible` (Opus) rewrites the plan to exploit the world
   before the first write. Returns a full plan (not the `===` diff-ops format).
-- `WriterAgent` runs on Opus for **all** passes when `non_earth`, with canon + bible +
+- `WriterAgent` runs on Opus for **all** passes on NON-EARTH, with canon + bible +
   blacklist in context (`_world_block`). Reviewers get the **canon only**, never the bible.
-- Two Inner-loop reviewers (Sonnet), added to the checker fan-out only when `non_earth`
+- Two Inner-loop reviewers (Sonnet), added to the checker fan-out only on NON-EARTH
   (they raise `max_workers` from the base 3 to 5): `StrangenessReviewerAgent` (flags prose
-  too Earth-tame) and `SensoryQuotaAgent` (bans abstraction hedge-nouns, reports per-section
-  sensory density). `EngineReviewerAgent` (see Story engine section) also gains a
-  weird-with-spine clause on `non_earth`: strangeness that sits on no causal beat is flagged
+  too Earth-tame) and `SensoryQuotaAgent` (bans abstraction hedge-nouns; holds sensory
+  density inside a two-sided band and reports register repetition — see Variance).
+  `EngineReviewerAgent` (see Story engine section) gains its weird-with-spine clause
+  whenever a canon sheet exists: strangeness that sits on no causal beat is flagged
   `[CRAFT]` (noise), so `plan_revision` fixes it and it survives the prose-pass force-all.
 - The six existing reviewers are canon-aware via `agents/world_calibration.py:with_canon`,
   which tags findings `[CRAFT]` vs `[WORLD]` and lowers authority near canon-elements —
-  **PeerWriter is exempt** (`lower_authority=False`). `plan_revision`/`plan_revision_prose`
-  fix `[CRAFT]`, treat `[WORLD]` as intent (and the prose pass drops `[WORLD]` even under
-  force-all). `with_canon(prompt, "")` returns the prompt unchanged — that identity is what
-  keeps EARTH byte-for-byte, so existing prompt-string tests are the regression guard.
-- Cost: a `non_earth` run is ~3–5× an EARTH run (three Opus calls before the first write +
-  Opus on every write) — a deliberate tradeoff. `run()` returns `non_earth`; `/run` surfaces it.
+  **PeerWriter and AIFailureChecker are exempt** (`lower_authority=False`).
+  `plan_revision`/`plan_revision_prose` take `canon_aware=` (true for SECONDARY too, not
+  just NON-EARTH): fix `[CRAFT]`, treat `[WORLD]` as intent (and the prose pass drops
+  `[WORLD]` even under force-all). `with_canon(prompt, "")` returns the prompt unchanged —
+  that identity is what keeps EARTH byte-for-byte, so existing prompt-string tests are the
+  regression guard.
+- Cost: a NON-EARTH run is ~3–5× an EARTH run (three Opus calls before the first write +
+  Opus on every write) — a deliberate tradeoff, and the reason the classifier is told to
+  reach for the tier sparingly. `run()` returns `world_class` and keeps `non_earth`
+  (NON-EARTH only) for the server, CLI, and UI.
+
+## Variance and the anti-monotony guards
+
+Every reviewer optimizes a per-section property; nine passes of that converge on a draft
+where each paragraph is defensible and the sequence reads mechanical (see PR #20).
+
+- `agents/variance_agent.py:VarianceReviewerAgent` (DEFAULT_MODEL — counting a construction
+  across a whole draft is the job) runs in `_run_prose_pass`, which always sees the full
+  story; the Inner fan-out may pass only the sections the writer touched, and a repetition
+  count on a subset means nothing. It reports the top-N repeated *techniques* with counts
+  and section spread, quotes the three worst instances, names the ones to keep, and demands
+  at least half the rest be cut or replaced. Findings reach `plan_revision_prose` as
+  `variance_feedback` and are force-fixed like prose findings. **Runs on EARTH too.**
+- `SensoryQuotaAgent` holds a two-sided band (`DENSITY_FLOOR`/`DENSITY_CEILING`, overridable
+  per run). It was a one-way ratchet that could only ask for more; net-additive instructions
+  are now forbidden at or above the floor (a swap must name what it cuts).
+- Repetition findings are carved out of the `[WORLD]` bucket in `with_canon` — tic density,
+  unvarying rhythm, tonal homogenization are **always `[CRAFT]`**, however well the repeated
+  move fits the world. Before that carve-out the tic detector excused its own findings as
+  world-consistent, and `_PROSE_BUCKET_CLAUSE` then dropped them.
 
 ## Story engine, escalation, and constraints
 
@@ -97,7 +147,7 @@ Craft insights from `theory-of-the-good-unique-short-story.md`, applied on **eve
   engine as binding.
 - `EngineReviewerAgent` (`agents/engine_agent.py`, `FEEDBACK_MODEL`) is the Inner-loop reviewer
   for both: engine adherence and causality/escalation (does beat N cause N+1; does exposition
-  ascend to rising action). Canon-aware via `with_canon` on `non_earth`.
+  ascend to rising action). Canon-aware via `with_canon` whenever a canon sheet exists.
 - `constraint` is an optional hard formal rule threaded like `style` end-to-end (`run` param →
   `PlanningAgent.run` → `WriterAgent.run`/`revise` via a `_constraint_block`, plus server, CLI,
   and browser UI). The planner translates it into checkable rules; the writer obeys it on every
@@ -105,6 +155,32 @@ Craft insights from `theory-of-the-good-unique-short-story.md`, applied on **eve
   in `constraints.py:check_constraint` and returned as `constraint_check` (surfaced by `/run`,
   the CLI, and the UI). Non-countable constraints (document-form, second-person) lean on the
   engine reviewer.
+
+## Length (`plan_length.py`)
+
+Same policy as `constraints.py`: anything countable is counted in Python, not trusted to a
+model. One run produced a plan headed `Total: 14,589 words across 20 sections` that then
+enumerated **8 sections budgeted at 6,050 words**; the writer hit that plan to within 2.6%
+and the story came out 44% short. Nothing between the two counted.
+
+- `check_plan_length(plan, target_length, tolerance=0.15)` → `declared` / `target` / `ratio`
+  / `sections` / `passed`, or **`None` when there is nothing to judge** (no parseable target,
+  or a plan with no budgets) — so an unrecognised target behaves exactly as it did before.
+  Budget parsing prefers explicit `Budget: N words` and `standard | N words` entries and
+  falls back to `~Nw` half-budgets only when none are found: both notations appeared in the
+  failing run and summing them would double-count. Lines containing `total` are skipped, or
+  the header line the plan contradicts would be counted as a section budget and mask the bug.
+- `WritingCouncil._enforce_plan_length` runs it in `_run_inner` right before the initial
+  write — after any `revise_with_world_bible`, since that Opus rewrite is the plan the writer
+  actually receives and it carried the bad arithmetic forward verbatim. On a miss it calls
+  `PlanningAgent.fix_plan_length` (Opus, `PLAN_FIX_MAX_TOKENS` 16000 — the corrected plan is
+  *longer*, which the 8192 default would truncate) with the exact counts in the prompt.
+  **One retry, accepted whatever it returns**: a second miss is rarer than a re-plan loop is
+  expensive. A plan that adds up costs no extra call. Skipped on the revise path, where the
+  plan describes an existing draft whose length is the draft's, not the target's.
+- `target_length` now reaches `WriterAgent.run`/`revise` via a `_length_block` (rendered only
+  when non-empty, like `_constraint_block`). The writer previously knew the target only
+  through the plan's budgets, so when those were wrong nothing on the write side could notice.
 
 ## Images
 
@@ -128,8 +204,8 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   `PlanningAgent.run` gets the intake `brief` (and `rewrite_notes`) alongside `idea`;
   the original prose itself never reaches the writer.
 - **revise** — `_run_revise_setup` plans the existing story (`plan_existing=True`),
-  classifies it, world-builds if `non_earth`, and sectionizes it; `_run_inner(seeded=True,
-  ...)` then skips the plan and initial-write calls and starts straight at the checker
+  classifies it, world-builds if the tier calls for it, and sectionizes it;
+  `_run_inner(seeded=True, ...)` then skips the plan and initial-write calls and starts straight at the checker
   fan-out, so the uploaded draft is the first draft the review/revise loops see.
 
 - `agents/intake_agent.py:IntakeAgent` (DEFAULT_MODEL) digests the source text into a
@@ -137,7 +213,7 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   world rules, characters, plot, structure, intent, length, synopsis); `parse_brief`
   turns it back into a dict. Its `WORLD_CLASS_GUESS` is advisory only —
   `PlanningAgent` remains the sole authority for the `<<<WORLD_CLASS>>>` tag that trips
-  `non_earth`, on both rewrite paths.
+  the tier, on both rewrite paths.
 - The whole brief text reaches `PlanningAgent` (as `brief`, plus `source_story` and
   `PLAN_EXISTING_ADDENDUM` on revise) so it can plan off everything the intake noticed.
   `WritingCouncil._merge_brief`, by contrast, only backfills unset **craft params** —
@@ -152,7 +228,7 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   prose is never re-emitted by the model, so it can't mutate. `fallback_sectionize`
   groups the draft by scene-break glyphs or blank lines if the anchors don't fit the
   draft cleanly.
-- A `non_earth` revise run still runs `WorldBuilderAgent` for canon/bible, but
+- A NON-EARTH revise run still runs `WorldBuilderAgent` for canon/bible, but
   `PlanningAgent.revise_with_world_bible` is deliberately skipped — it rewrites the plan
   to exploit the world, which would pull the plan away from the draft it has to describe.
 - `story_intake.py:load_story_text` reads the file and has no policy of its own: it
@@ -168,7 +244,8 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   component advances. A marker must be `v`-prefixed, so `Blade Runner 2049` is treated
   as a title, not a version. A user-typed title is used verbatim — no bump.
 - `run()` returns `intake_brief`, `rewrite_mode`, and the resolved `title` and
-  `target_length` (post-merge) alongside the usual `story`/`non_earth`/`planning_details`.
+  `target_length` (post-merge) alongside the usual
+  `story`/`world_class`/`non_earth`/`planning_details`.
 - `server.py`'s `/run` accepts `story_file` (uploaded, written to a temp path and cleaned
   up after the run) or `story_text` (pasted), plus `rewrite_mode`/`rewrite_notes`.
   `static/index.html` adds an upload control, mode radios, a notes box, and blanks

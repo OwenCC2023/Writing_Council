@@ -107,3 +107,27 @@ def test_section_revision_honors_an_explicit_budget():
                       return_value="<<<SECTION 1>>>\na\n\n<<<SECTION 2>>>\nb") as m:
         agent.revise(plan="p", story=story, feedback=feedback, max_tokens=28000)
     assert m.call_args.kwargs["max_tokens"] == 28000
+
+
+def test_length_block_absent_without_a_target():
+    """Existing prompt bytes are unchanged when no target is supplied."""
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p")
+    assert "TARGET LENGTH" not in m.call_args.args[0]
+
+
+def test_length_block_reaches_run_and_revise():
+    agent = WriterAgent()
+    with patch.object(agent, "_call_claude", return_value="story") as m:
+        agent.run(plan="p", target_length="14,589 words")
+    system = m.call_args.args[0]
+    assert "TARGET LENGTH: 14,589 words" in system
+    # The instruction is per-section, not a running total the writer has to track.
+    assert "Write each section to its own budget" in system
+    assert "do not pad" in system
+
+    with patch.object(agent, "_call_claude", return_value="revised") as m:
+        agent.revise(plan="p", story="no markers here", feedback="f",
+                     target_length="14,589 words")
+    assert "TARGET LENGTH: 14,589 words" in m.call_args.args[0]

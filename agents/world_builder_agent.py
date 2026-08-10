@@ -33,6 +33,33 @@ Emit the CANON SHEET block first so it is never at risk of truncation. Use the t
 delimiter lines verbatim.\
 """
 
+CANON_ONLY_SYSTEM_PROMPT_TEMPLATE = """\
+You are a world-builder. You are given a story idea and a narrative plan set in a SECONDARY \
+world: the sensory ground is ordinary human experience — rooms are rooms, bread tastes like \
+bread — but a bounded set of departures sits on top of it. Your job is to state that \
+departure set so precisely that no later agent has to guess at it. Produce ONE artifact, \
+with this exact delimiter, and NOTHING else:
+
+=== CANON SHEET ===
+A short, authoritative list of the world's load-bearing rules: what is possible here that \
+is not possible for the reader, what it costs, who can do it, and where the limits sit. \
+Each rule one concrete, usable line (e.g. "A healed board holds for a season, then fails; \
+nobody heals the same board twice"). Include the social and economic consequences of the \
+departures — those are where a secondary world's stories actually live — and any rule the \
+plan relies on without stating.
+
+Do NOT produce a world bible and do NOT write a sensory detail bank. The writer knows what \
+this world's air and furniture feel like; supplying that material would only push the prose \
+toward describing what needs no describing. Rules only.
+
+Avoid the clichés in this blacklist:
+---
+{blacklist}
+---
+
+Use the delimiter line verbatim.\
+"""
+
 
 class WorldBuilderAgent(BaseAgent):
     """Precomputes an out-of-distribution world into a canon sheet + world-bible."""
@@ -41,15 +68,20 @@ class WorldBuilderAgent(BaseAgent):
         super().__init__(model=model)
 
     def run(self, idea: str, plan: str, world_rules: str = "",
-            blacklist_path=None) -> dict:
+            blacklist_path=None, canon_only: bool = False) -> dict:
+        """Precompute the world. ``canon_only`` returns rules without a sensory bible —
+        the SECONDARY tier, where the reader already knows what the rooms feel like."""
         path = Path(blacklist_path) if blacklist_path else DEFAULT_BLACKLIST_PATH
         blacklist = path.read_text(encoding="utf-8")
-        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(blacklist=blacklist)
+        template = (CANON_ONLY_SYSTEM_PROMPT_TEMPLATE if canon_only
+                    else SYSTEM_PROMPT_TEMPLATE)
+        system_prompt = template.format(blacklist=blacklist)
         user_prompt = (
             f"IDEA:\n{idea}\n\n"
             f"NARRATIVE PLAN (already contains any image-derived WORLD DEDUCTION):\n{plan}\n\n"
             f"WORLD RULES (text):\n{world_rules or '(none)'}\n\n"
-            "Produce the CANON SHEET and WORLD BIBLE."
+            + ("Produce the CANON SHEET." if canon_only
+               else "Produce the CANON SHEET and WORLD BIBLE.")
         )
         output = self._call_claude(system_prompt, user_prompt,
                                    model=self.model, max_tokens=WORLD_BUILDER_MAX_TOKENS)

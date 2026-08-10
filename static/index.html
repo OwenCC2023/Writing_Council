@@ -202,6 +202,14 @@
     <label for="style_field">Style <span class="optional">(optional)</span></label>
     <input type="text" id="style_field" name="style_field">
 
+    <label for="world_class">World class</label>
+    <select id="world_class" name="world_class">
+      <option value="auto" selected>Auto &mdash; let the planner decide</option>
+      <option value="EARTH">Earth &mdash; contemporary or familiar-historical</option>
+      <option value="SECONDARY">Secondary &mdash; magic in a real city, alt-history, near-future</option>
+      <option value="NON-EARTH">Non-Earth &mdash; another planet, far future, deep past (3&ndash;5&times; cost)</option>
+    </select>
+
     <label for="constraint">Constraint <span class="optional">(optional)</span></label>
     <input type="text" id="constraint" name="constraint"
            placeholder="e.g. exactly 200 words · forbidden words: love, death · told as an obituary">
@@ -433,6 +441,7 @@
       framework:        document.getElementById('framework').value.trim(),
       style:            document.getElementById('style_field').value.trim(),
       constraint:       document.getElementById('constraint').value.trim(),
+      world_class:      document.getElementById('world_class').value,
       story_file:       uploadedStory ? { data: uploadedStory.data, filename: uploadedStory.filename } : null,
       rewrite_mode:     (document.querySelector('input[name="rewrite_mode"]:checked') || {}).value || '',
       rewrite_notes:    rewriteNotes.value.trim(),

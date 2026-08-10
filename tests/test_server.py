@@ -299,3 +299,33 @@ def test_run_keeps_its_defaults_for_a_fresh_run(client):
     kwargs = MockCouncil.return_value.run.call_args.kwargs
     assert kwargs["target_length"] == "8,000 words"
     assert kwargs["target_audience"] == "Adult sci-fi readers"
+
+
+def test_run_defaults_world_class_to_auto(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {"story": "x", "log": []}
+        client.post("/run", data=json.dumps({"idea": "i"}),
+                    content_type="application/json")
+    assert MockCouncil.return_value.run.call_args.kwargs["world_class"] == "auto"
+
+
+def test_run_threads_a_world_class_override(client):
+    with patch("server.WritingCouncil") as MockCouncil:
+        MockCouncil.return_value.run.return_value = {
+            "story": "x", "log": [], "world_class": "SECONDARY", "non_earth": False}
+        resp = client.post("/run",
+                           data=json.dumps({"idea": "i", "world_class": "secondary"}),
+                           content_type="application/json")
+    assert MockCouncil.return_value.run.call_args.kwargs["world_class"] == "SECONDARY"
+    assert json.loads(resp.data)["world_class"] == "SECONDARY"
+
+
+def test_run_rejects_an_unknown_world_class_with_400(client):
+    """A bad tier is a user mistake, like a bad file extension - not a 500."""
+    with patch("server.WritingCouncil") as MockCouncil:
+        resp = client.post("/run",
+                           data=json.dumps({"idea": "i", "world_class": "Mars"}),
+                           content_type="application/json")
+    assert resp.status_code == 400
+    assert "Mars" in json.loads(resp.data)["error"]
+    MockCouncil.return_value.run.assert_not_called()

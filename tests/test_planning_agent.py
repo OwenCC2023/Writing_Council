@@ -85,20 +85,20 @@ def test_plan_revision_earth_prompt_unchanged():
     assert m.call_args.args[0] == REVISION_PLAN_SYSTEM_PROMPT   # exact, unchanged
 
 
-def test_plan_revision_non_earth_adds_bucket_clause():
+def test_plan_revision_canon_aware_adds_bucket_clause():
     agent = PlanningAgent()
     with patch.object(agent, "_call_claude", return_value="out") as m:
-        agent.plan_revision(story="s", plan="p", feedbacks=["f"], non_earth=True)
+        agent.plan_revision(story="s", plan="p", feedbacks=["f"], canon_aware=True)
     sp = m.call_args.args[0]
     assert sp != REVISION_PLAN_SYSTEM_PROMPT
     assert "[WORLD]" in sp and "[CRAFT]" in sp
 
 
-def test_plan_revision_prose_non_earth_drops_world_tag():
+def test_plan_revision_prose_canon_aware_drops_world_tag():
     agent = PlanningAgent()
     with patch.object(agent, "_call_claude", return_value="out") as m:
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="pf",
-                                  consistency_feedback="cf", non_earth=True)
+                                  consistency_feedback="cf", canon_aware=True)
     assert "[WORLD]" in m.call_args.args[0]
 
 
@@ -172,3 +172,43 @@ def test_plan_revision_prose_omits_variance_block_when_empty():
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="f",
                                   consistency_feedback="c")
     assert "REPEATED-TECHNIQUE" not in m.call_args.args[1]
+
+
+def test_classifier_offers_three_tiers_and_a_sensory_test():
+    from agents.planning_agent import CLASSIFY_ADDENDUM
+    for tag in ("<<<WORLD_CLASS: EARTH>>>", "<<<WORLD_CLASS: SECONDARY>>>",
+                "<<<WORLD_CLASS: NON-EARTH>>>"):
+        assert tag in CLASSIFY_ADDENDUM
+    # The test is sensory ground, not rule count: wands in Britain is SECONDARY.
+    assert "WOULD A READER'S BODY KNOW THIS ROOM" in CLASSIFY_ADDENDUM
+    assert "SENSORY GROUND, not by how many rules differ" in CLASSIFY_ADDENDUM
+    # Only the top tier chunks smaller, and the prompt says the tier is expensive.
+    assert "If and only if NON-EARTH" in CLASSIFY_ADDENDUM
+    assert "expensive" in CLASSIFY_ADDENDUM
+
+
+def test_fix_plan_length_shows_the_planner_exact_arithmetic():
+    from agents.planning_agent import LENGTH_FIX_SYSTEM_PROMPT, PLAN_FIX_MAX_TOKENS
+    agent = PlanningAgent()
+    check = {"declared": 6050, "target": 14589, "ratio": 0.4147, "sections": 8,
+             "passed": False}
+    with patch.object(agent, "_call_claude", return_value="FIXED PLAN") as m:
+        result = agent.fix_plan_length(plan="OLD PLAN", target_length="14,589 words",
+                                       check=check)
+    assert result == {"agent": "PlanningAgent", "output": "FIXED PLAN"}
+    user_prompt = m.call_args.args[1]
+    assert "6,050 words" in user_prompt
+    assert "41% of the 14,589-word target" in user_prompt
+    assert "shortfall is 8,539 words" in user_prompt
+    assert "OLD PLAN" in user_prompt
+    assert m.call_args.args[0] == LENGTH_FIX_SYSTEM_PROMPT
+    # A corrected plan is longer than the one it replaces; the 8192 default would cut it.
+    assert m.call_args.kwargs["max_tokens"] == PLAN_FIX_MAX_TOKENS
+
+
+def test_fix_plan_length_prompt_forbids_padding_the_numbers():
+    from agents.planning_agent import LENGTH_FIX_SYSTEM_PROMPT
+    assert "counted, not \\nestimated" in LENGTH_FIX_SYSTEM_PROMPT or \
+           "counted, not estimated" in LENGTH_FIX_SYSTEM_PROMPT
+    assert "do NOT pad" in LENGTH_FIX_SYSTEM_PROMPT
+    assert "budget correction, not a re-conception" in LENGTH_FIX_SYSTEM_PROMPT
