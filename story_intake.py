@@ -26,7 +26,7 @@ def word_count(text: str) -> int:
 def _load_docx(path: Path) -> str:
     try:
         from docx import Document
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:  # pragma: no cover - python-docx is in requirements.txt
         raise ImportError(
             "Reading .docx requires python-docx. Run: pip install python-docx"
         ) from exc
@@ -73,7 +73,7 @@ def bump_title_version(title: str) -> str:
     return f"{head}{marker}{major}"
 
 
-def load_story_text(path) -> str:
+def load_story_text(path: str | Path) -> str:
     """Return the plain text of a .txt, .md, or .docx story file."""
     path = Path(path)
     suffix = path.suffix.lower()

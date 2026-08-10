@@ -58,7 +58,12 @@ def _brief_field_pattern() -> re.Pattern:
 
 
 def parse_brief(brief: str) -> dict:
-    """Split a STORY BRIEF block into {field: body}. Missing fields become ''."""
+    """Split a STORY BRIEF block into {field: body}. Missing fields become ''.
+
+    A missing field is not fatal — the run continues with a blank — but it is
+    warned about, so a malformed brief cannot silently swallow the upload's
+    TITLE or LENGTH.
+    """
     pattern = _brief_field_pattern()
     fields = {name: "" for name in BRIEF_FIELDS}
     current = None
@@ -69,6 +74,10 @@ def parse_brief(brief: str) -> dict:
             fields[current] = match.group(2).strip()
         elif current and line.strip() and not line.strip().startswith("==="):
             fields[current] = (fields[current] + "\n" + line.strip()).strip()
+    missing = [name for name in BRIEF_FIELDS if not fields[name]]
+    if missing:
+        print(f"[intake] WARNING: story brief is missing {len(missing)} field(s): "
+              f"{', '.join(missing)}. They stay blank for this run.")
     return fields
 
 

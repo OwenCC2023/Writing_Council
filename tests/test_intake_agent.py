@@ -36,11 +36,37 @@ def test_parse_brief_keeps_multiline_field_bodies():
     assert "STORYLINE" not in fields["PLOT"]
 
 
+def test_parse_brief_extracts_the_special_character_field_names():
+    """WORLD RULES has a space, STORYLINE/STRUCTURE a slash. Neither is a plain
+    identifier, so a pattern built on \\w+ or split on the first token would
+    quietly lose them (and their bodies would bleed into the field above)."""
+    fields = parse_brief(_BRIEF)
+    assert fields["WORLD RULES"] == (
+        "hyperlanes connect only certain systems; FTL comms need relay ships")
+    assert fields["STORYLINE/STRUCTURE"] == "third limited, past tense, chronological"
+    # Bodies stayed in their own field rather than bleeding into the previous one.
+    assert "hyperlanes" not in fields["SETTING"]
+    assert "third limited" not in fields["PLOT"]
+
+
 def test_parse_brief_missing_field_becomes_empty_string():
     fields = parse_brief("=== STORY BRIEF ===\nTITLE: Only This\n")
     assert fields["TITLE"] == "Only This"
     assert fields["PLOT"] == ""
     assert set(fields) == set(BRIEF_FIELDS)
+
+
+def test_parse_brief_warns_about_missing_fields(capsys):
+    """A malformed brief must not degrade to blanks invisibly."""
+    parse_brief("=== STORY BRIEF ===\nTITLE: Only This\n")
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "LENGTH" in out
+
+
+def test_parse_brief_is_silent_on_a_complete_brief(capsys):
+    parse_brief(_BRIEF)
+    assert "WARNING" not in capsys.readouterr().out
 
 
 def test_run_injects_computed_word_count_not_a_guess():
