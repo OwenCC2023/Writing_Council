@@ -11,6 +11,13 @@ from .base_agent import BaseAgent, FEEDBACK_MODEL
 
 _GLYPH_BREAK = re.compile(r"^\s*(\*\s*\*\s*\*|-{3,}|#{1,6})\s*$", re.MULTILINE)
 
+# Text before the first anchor is dropped: that is how manuscript front matter
+# (byline, contact block, word count, title page) is discarded. A real header of
+# that kind runs well under 100 words, so 500 clears it with wide margin while
+# still catching a first anchor placed several paragraphs into the story — which
+# would silently delete the author's actual prose on a revise run.
+MAX_DROPPED_WORDS = 500
+
 SYSTEM_PROMPT = """\
 You are given a narrative plan and the full text of a draft that follows it. Return the \
 anchor for each planned section: the first six to ten words of the draft passage where \
@@ -31,7 +38,9 @@ def insert_markers(story: str, anchors: list) -> str:
     """Return the story with <<<SECTION N>>> markers, or None if anchors don't fit.
 
     Rejects an anchor that is absent, appears more than once, or arrives out of
-    order. Text before the first anchor is dropped.
+    order. Text before the first anchor is dropped (manuscript front matter);
+    the dropped word count is always logged, and a drop larger than
+    MAX_DROPPED_WORDS is treated as an anchor failure rather than accepted.
     """
     if not anchors:
         return None
@@ -43,6 +52,15 @@ def insert_markers(story: str, anchors: list) -> str:
         positions.append(first)
     if positions != sorted(positions) or len(set(positions)) != len(positions):
         return None
+
+    dropped = len(story[:positions[0]].split())
+    if dropped:
+        if dropped > MAX_DROPPED_WORDS:
+            print(f"[sectionizer] First anchor would drop {dropped} words "
+                  f"(limit {MAX_DROPPED_WORDS}) — rejecting the anchors.")
+            return None
+        print(f"[sectionizer] Dropping {dropped} words of front matter before "
+              f"the first anchor.")
 
     chunks = []
     for i, start in enumerate(positions):
@@ -76,7 +94,16 @@ def fallback_sectionize(story: str, count: int) -> str:
 
 
 def sectionize(story: str, anchors: list, count: int) -> str:
-    """Anchor-based marking when it fits; deterministic fallback otherwise."""
+    """Anchor-based marking when it fits; deterministic fallback otherwise.
+
+    The anchor count must equal `count`: every downstream consumer assumes plan
+    section N is draft section N, so a mismatched set would silently misalign
+    revision instructions with the prose they target.
+    """
+    if len(anchors) != count:
+        print(f"[sectionizer] Got {len(anchors)} anchors for {count} plan sections "
+              f"— using structural fallback.")
+        return fallback_sectionize(story, count)
     marked = insert_markers(story, anchors)
     if marked is not None:
         return marked

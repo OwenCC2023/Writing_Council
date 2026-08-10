@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from agents.sectionizer_agent import (
     SectionizerAgent, insert_markers, fallback_sectionize, sectionize,
+    MAX_DROPPED_WORDS,
 )
 
 _STORY = (
@@ -64,6 +65,37 @@ def test_fallback_sectionize_never_emits_more_sections_than_chunks():
 def test_sectionize_falls_back_when_anchors_do_not_match():
     out = sectionize(_STORY, ["nope", "still nope"], 2)
     assert out.count("<<<SECTION") == 2
+
+
+def test_sectionize_falls_back_when_there_are_too_many_anchors():
+    """Anchor count must match the plan's section count, or draft section N
+    stops meaning plan section N."""
+    out = sectionize(_STORY, ["The fleet dropped out", "By morning the line",
+                              "At Frankfurt the timing"], 2)
+    assert out.count("<<<SECTION") == 2
+
+
+def test_sectionize_falls_back_when_there_are_too_few_anchors():
+    out = sectionize(_STORY, ["The fleet dropped out"], 3)
+    assert out.count("<<<SECTION") == 3
+
+
+def test_insert_markers_logs_a_small_front_matter_drop(capsys):
+    insert_markers(_STORY, ["The fleet dropped out", "By morning the line",
+                            "At Frankfurt the timing"])
+    assert "dropp" in capsys.readouterr().out.lower()
+
+
+def test_insert_markers_rejects_an_oversized_drop():
+    """Losing real scenes is an anchor failure, not front matter."""
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    assert insert_markers(story, ["The real opening line", "And later"]) is None
+
+
+def test_sectionize_falls_back_after_an_oversized_drop():
+    story = ("word " * (MAX_DROPPED_WORDS + 50)) + "\n\nThe real opening line.\n\nAnd later."
+    out = sectionize(story, ["The real opening line", "And later"], 2)
+    assert "word word" in out  # the dropped prose survives via the fallback
 
 
 def test_agent_run_returns_one_anchor_per_line():
