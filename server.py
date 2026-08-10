@@ -18,13 +18,18 @@ def index():
     return app.send_static_file("index.html")
 
 
-def _write_temp_upload(data_uri: str, filename: str) -> str:
-    """Decode a base64 data URI to a temp file and return its path."""
+def _write_temp_upload(data_uri: str, filename: str,
+                       default_suffix: str = ".png") -> str:
+    """Decode a base64 data URI to a temp file and return its path.
+
+    `default_suffix` is what an unnamed or extension-less upload lands on, so a
+    story upload does not get handed to load_story_text wearing an image suffix.
+    """
     raw = data_uri
     if "," in raw:
         raw = raw.split(",", 1)[1]
     file_bytes = base64.b64decode(raw)
-    suffix = Path(filename or "upload.png").suffix or ".png"
+    suffix = Path(filename or "").suffix or default_suffix
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     tmp.write(file_bytes)
     tmp.close()
@@ -57,9 +62,17 @@ def run():
         story_file = data.get("story_file")
         if story_file:
             source_filename = story_file.get("filename", "")
-            story_path = _write_temp_upload(story_file["data"], source_filename)
+            if not story_file.get("data"):
+                return jsonify({"error": "story_file needs a base64 'data' field."}), 400
+            story_path = _write_temp_upload(story_file["data"], source_filename,
+                                            default_suffix=".txt")
             temp_paths.append(story_path)
-            source_story = load_story_text(story_path)
+            try:
+                source_story = load_story_text(story_path)
+            except (ValueError, FileNotFoundError) as exc:
+                # A bad extension or an empty file is a user mistake, not a
+                # server fault; load_story_text's message already says which.
+                return jsonify({"error": str(exc)}), 400
 
         has_source = bool(source_story)
         council = WritingCouncil()
