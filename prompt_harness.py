@@ -23,6 +23,11 @@ def _ask(prompt: str, default: str = "", required: bool = False) -> str:
         try:
             value = input(f"  {prompt}{hint}: ").strip()
         except EOFError:
+            # Closed stdin cannot answer a re-prompt, so a required field with
+            # no default would loop forever. Bail instead of spinning.
+            if required and not default:
+                print("\n  Input ended before a required value was given.")
+                sys.exit(1)
             value = ""
         if value:
             return value

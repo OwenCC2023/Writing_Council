@@ -36,6 +36,26 @@ def _result():
             "intake_brief": "=== STORY BRIEF ==="}
 
 
+def test_ask_gives_up_on_a_required_field_at_eof():
+    """Closed stdin cannot answer a re-prompt; looping would hang the process."""
+    def _eof(prompt=""):
+        raise EOFError
+
+    with patch("builtins.input", _eof):
+        with pytest.raises(SystemExit) as excinfo:
+            harness._ask("Author name", required=True)
+    assert excinfo.value.code == 1
+
+
+def test_ask_still_returns_a_default_at_eof():
+    def _eof(prompt=""):
+        raise EOFError
+
+    with patch("builtins.input", _eof):
+        assert harness._ask("Framework", default="Short Story") == "Short Story"
+        assert harness._ask("Style") == ""
+
+
 def test_rewrite_answers_are_threaded_into_the_run(tmp_path):
     story = tmp_path / "sforzato.txt"
     story.write_text("The fleet dropped out of the lane.", encoding="utf-8")
