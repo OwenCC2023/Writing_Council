@@ -61,8 +61,9 @@ def test_run_prose_pass_calls_agents_in_order():
     council.writer.revise.assert_called_once_with(
         plan="plan", story="story", feedback="revplan",
         model=None, canon_sheet="", world_bible="", constraint="",
-        # No target_length here, so the budget resolves to the unchanged floor.
-        max_tokens=INITIAL_WRITE_MAX_TOKENS)
+        # No target_length here, so the budget resolves to the unchanged floor and the
+        # writer's length block renders empty.
+        max_tokens=INITIAL_WRITE_MAX_TOKENS, target_length="")
 
 
 def test_run_applies_one_prose_pass_and_strips_markers():
@@ -383,3 +384,87 @@ def test_run_returns_world_class_alongside_the_legacy_flag():
     assert result["world_class"] == wc.SECONDARY
     # non_earth stays a NON-EARTH-only flag: the server, CLI, and UI all read it.
     assert result["non_earth"] is False
+
+
+_SHORT_PLAN = ("<<<WORLD_CLASS: EARTH>>>\nTotal: 10,000 words\n"
+               "## SECTION 1\n**Budget: 500 words**\n"
+               "## SECTION 2\n**Budget: 500 words**\n")
+_GOOD_PLAN = ("<<<WORLD_CLASS: EARTH>>>\n"
+              "## SECTION 1\n**Budget: 5,000 words**\n"
+              "## SECTION 2\n**Budget: 5,000 words**\n")
+
+
+def _length_council(plan_output):
+    council = WritingCouncil()
+    council.planner.run = MagicMock(
+        return_value={"agent": "PlanningAgent", "output": plan_output})
+    council.planner.fix_plan_length = MagicMock(
+        return_value={"agent": "PlanningAgent", "output": _GOOD_PLAN})
+    council.writer.run = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nS.", "revised_sections": None})
+    council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
+    council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
+    council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.writer.revise = MagicMock(return_value={
+        "agent": "WriterAgent", "output": "final", "revised_sections": None})
+    return council
+
+
+def test_a_short_budgeted_plan_is_rebudgeted_before_the_write():
+    """The Granger bug: budgets summed to 41% of target, the writer obeyed them, and
+    no later pass recovered. Catch it before a word is written."""
+    council = _length_council(_SHORT_PLAN)
+
+    council._run_inner(idea="i", target_length="10,000 words", target_audience="a")
+
+    council.planner.fix_plan_length.assert_called_once()
+    check = council.planner.fix_plan_length.call_args.kwargs["check"]
+    assert check["declared"] == 1000 and check["target"] == 10000
+    # The writer gets the re-budgeted plan, not the short one.
+    assert council.writer.run.call_args.kwargs["plan"] == _GOOD_PLAN
+
+
+def test_a_plan_that_adds_up_costs_no_extra_call():
+    council = _length_council(_GOOD_PLAN)
+
+    council._run_inner(idea="i", target_length="10,000 words", target_audience="a")
+
+    council.planner.fix_plan_length.assert_not_called()
+
+
+def test_an_unparseable_target_length_skips_the_check_entirely():
+    """No target means no opinion - the pipeline behaves as it did before the check."""
+    council = _length_council(_SHORT_PLAN)
+
+    council._run_inner(idea="i", target_length="novella length", target_audience="a")
+
+    council.planner.fix_plan_length.assert_not_called()
+
+
+def test_the_writer_is_told_the_target_length():
+    council = _length_council(_GOOD_PLAN)
+
+    council._run_inner(idea="i", target_length="10,000 words", target_audience="a")
+
+    assert council.writer.run.call_args.kwargs["target_length"] == "10,000 words"
+    assert council.writer.revise.call_args.kwargs["target_length"] == "10,000 words"
+
+
+def test_the_rebudget_runs_after_the_bible_revision():
+    """The check must see the plan the writer receives: on NON-EARTH that is the Opus
+    bible rewrite, which carried the bad arithmetic forward verbatim in the real run."""
+    council = _length_council("<<<WORLD_CLASS: NON-EARTH>>>\n## SECTION 1\n**Budget: 9,000 words**\n")
+    council.world_builder.run = MagicMock(return_value={
+        "agent": "WorldBuilderAgent", "output": "o",
+        "canon_sheet": "CANON", "world_bible": "BIBLE"})
+    council.planner.revise_with_world_bible = MagicMock(return_value={
+        "agent": "PlanningAgent", "output": _SHORT_PLAN})
+    council.strangeness.run = MagicMock(return_value={"output": "st", "agent": "S"})
+    council.sensory.run = MagicMock(return_value={"output": "se", "agent": "Se"})
+
+    council._run_inner(idea="i", target_length="10,000 words", target_audience="a")
+
+    # The original plan added up; the bible revision broke it, and that is what got caught.
+    council.planner.fix_plan_length.assert_called_once()
+    assert council.planner.fix_plan_length.call_args.kwargs["check"]["declared"] == 1000

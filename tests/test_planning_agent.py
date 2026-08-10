@@ -185,3 +185,30 @@ def test_classifier_offers_three_tiers_and_a_sensory_test():
     # Only the top tier chunks smaller, and the prompt says the tier is expensive.
     assert "If and only if NON-EARTH" in CLASSIFY_ADDENDUM
     assert "expensive" in CLASSIFY_ADDENDUM
+
+
+def test_fix_plan_length_shows_the_planner_exact_arithmetic():
+    from agents.planning_agent import LENGTH_FIX_SYSTEM_PROMPT, PLAN_FIX_MAX_TOKENS
+    agent = PlanningAgent()
+    check = {"declared": 6050, "target": 14589, "ratio": 0.4147, "sections": 8,
+             "passed": False}
+    with patch.object(agent, "_call_claude", return_value="FIXED PLAN") as m:
+        result = agent.fix_plan_length(plan="OLD PLAN", target_length="14,589 words",
+                                       check=check)
+    assert result == {"agent": "PlanningAgent", "output": "FIXED PLAN"}
+    user_prompt = m.call_args.args[1]
+    assert "6,050 words" in user_prompt
+    assert "41% of the 14,589-word target" in user_prompt
+    assert "shortfall is 8,539 words" in user_prompt
+    assert "OLD PLAN" in user_prompt
+    assert m.call_args.args[0] == LENGTH_FIX_SYSTEM_PROMPT
+    # A corrected plan is longer than the one it replaces; the 8192 default would cut it.
+    assert m.call_args.kwargs["max_tokens"] == PLAN_FIX_MAX_TOKENS
+
+
+def test_fix_plan_length_prompt_forbids_padding_the_numbers():
+    from agents.planning_agent import LENGTH_FIX_SYSTEM_PROMPT
+    assert "counted, not \\nestimated" in LENGTH_FIX_SYSTEM_PROMPT or \
+           "counted, not estimated" in LENGTH_FIX_SYSTEM_PROMPT
+    assert "do NOT pad" in LENGTH_FIX_SYSTEM_PROMPT
+    assert "budget correction, not a re-conception" in LENGTH_FIX_SYSTEM_PROMPT
