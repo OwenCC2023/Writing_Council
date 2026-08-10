@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 import consult_the_council as cli
 
 
@@ -34,6 +36,31 @@ def test_source_story_path_is_loaded_and_threaded(monkeypatch, tmp_path):
     assert kwargs["source_filename"] == str(story)
     assert kwargs["rewrite_mode"] == "revise"
     assert kwargs["rewrite_notes"] == "darker ending"
+
+
+def test_an_unreadable_source_story_exits_cleanly(monkeypatch, capsys, tmp_path):
+    """A config typo should read as a message, not a traceback."""
+    bad = tmp_path / "story.pdf"
+    bad.write_text("prose", encoding="utf-8")
+    monkeypatch.setattr(cli, "SOURCE_STORY_PATH", str(bad))
+    with patch.object(cli, "WritingCouncil") as MockCouncil:
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main()
+    assert excinfo.value.code == 1
+    out = capsys.readouterr().out
+    assert "SOURCE_STORY_PATH" in out
+    assert "Unsupported story file type" in out
+    MockCouncil.assert_not_called()
+
+
+def test_a_missing_source_story_exits_cleanly(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(cli, "SOURCE_STORY_PATH", str(tmp_path / "nope.txt"))
+    with patch.object(cli, "WritingCouncil") as MockCouncil:
+        with pytest.raises(SystemExit) as excinfo:
+            cli.main()
+    assert excinfo.value.code == 1
+    assert "SOURCE_STORY_PATH" in capsys.readouterr().out
+    MockCouncil.assert_not_called()
 
 
 def test_brief_is_printed_when_present(monkeypatch, capsys, tmp_path):

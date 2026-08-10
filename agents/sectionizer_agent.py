@@ -86,6 +86,17 @@ def _split_chunks(story: str) -> list:
     return [c.strip() for c in re.split(r"\n\s*\n", story) if c.strip()]
 
 
+def _number_groups(groups: list) -> str:
+    """Mark the non-empty groups, numbered contiguously from 1.
+
+    Numbering off the kept groups rather than the raw list is what keeps the
+    numbers contiguous: an empty group must not consume a section number, since
+    every downstream consumer indexes sections by that number.
+    """
+    kept = [g for g in groups if g]
+    return "\n\n".join(f"<<<SECTION {i + 1}>>>\n{g}" for i, g in enumerate(kept))
+
+
 def fallback_sectionize(story: str, count: int) -> str:
     """Group the draft into at most `count` sections without an LLM.
 
@@ -109,14 +120,8 @@ def fallback_sectionize(story: str, count: int) -> str:
     for i in range(count):
         start = int(round(i * per))
         end = int(round((i + 1) * per)) if i + 1 < count else len(chunks)
-        group = "\n\n".join(chunks[start:end]).strip()
-        if group:
-            groups.append(group)
-    # Numbered off the kept groups, so section numbers stay contiguous even if a
-    # group came out empty — downstream consumers index by number.
-    return "\n\n".join(
-        f"<<<SECTION {i + 1}>>>\n{g}" for i, g in enumerate(groups)
-    )
+        groups.append("\n\n".join(chunks[start:end]).strip())
+    return _number_groups(groups)
 
 
 def sectionize(story: str, anchors: list, count: int) -> str:

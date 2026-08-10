@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from agents.sectionizer_agent import (
     SectionizerAgent, insert_markers, fallback_sectionize, sectionize,
-    MAX_DROPPED_WORDS,
+    _number_groups, MAX_DROPPED_WORDS,
 )
 
 _STORY = (
@@ -99,8 +99,16 @@ def test_sectionize_falls_back_after_an_oversized_drop():
     assert "word word" in out  # the dropped prose survives via the fallback
 
 
+def test_number_groups_skips_an_empty_group_without_skipping_a_number():
+    """The trap this closes: numbering off the unfiltered list would emit
+    SECTION 1 then SECTION 3, and every consumer indexes sections by number."""
+    assert _number_groups(["alpha", "", "beta"]) == (
+        "<<<SECTION 1>>>\nalpha\n\n<<<SECTION 2>>>\nbeta")
+    assert _number_groups(["", ""]) == ""
+
+
 def test_fallback_sectionize_numbers_kept_groups_contiguously():
-    """Numbers come off the kept groups, so an empty group cannot skip a number."""
+    """Characterisation of the whole path: markers always run 1..N."""
     story = "One.\n\nTwo.\n\nThree.\n\nFour.\n\nFive."
     for count in range(1, 8):
         out = fallback_sectionize(story, count)
