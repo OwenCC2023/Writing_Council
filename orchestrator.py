@@ -176,7 +176,7 @@ class WritingCouncil:
             if words > MAX_SOURCE_WORDS:
                 raise ValueError(
                     f"Source story is {words:,} words; the limit is "
-                    f"{MAX_SOURCE_WORDS}. Chunked intake is not supported."
+                    f"{MAX_SOURCE_WORDS:,}. Chunked intake is not supported."
                 )
             if mode == "revise" and words > REVISE_WARN_WORDS:
                 print(f"[outer] WARNING: {words:,}-word revise run. The full draft is "
@@ -203,6 +203,7 @@ class WritingCouncil:
             title = merged["title"]
         else:
             mode = ""
+            words = 0
 
         # Inner — generates plan and initial story (or, in revise mode, plans
         # and marks the existing draft, seeding the inner loop instead).
@@ -234,7 +235,9 @@ class WritingCouncil:
                     title=title,
                     constraint=constraint,
                     brief=brief_text,
+                    rewrite_mode=mode,
                     rewrite_notes=rewrite_notes,
+                    source_words=words,
                     label="outer.inner",
                 )
 
@@ -271,12 +274,23 @@ class WritingCouncil:
         so markdown decoration (``**SECTION 1:**``, ``## SECTION 1``) still
         counts and numbered sub-lists inside a section cannot inflate the total.
         Falls back to line-start numbering for plans that use bare ``1.`` heads.
+
+        The two strategies cooperate rather than letting either win outright. A
+        *single* SECTION number is ambiguous: it is either a genuine one-section
+        plan or one stray prose mention ("as section 2 sets up") inside a
+        bare-numbered plan. Only a header-shaped mention — the line starts with
+        it, decoration aside — is allowed to claim the plan on its own; an
+        in-prose mention defers to the bare numbering.
         """
-        keyed = re.findall(r'SECTION\s+(\d+)', plan, re.IGNORECASE)
-        if keyed:
-            return max(1, len(set(keyed)))
-        nums = re.findall(r'^\s*(\d+)[.:)]', plan, re.MULTILINE)
-        return max(1, len(set(nums)))
+        keyed = set(re.findall(r'SECTION\s+(\d+)', plan, re.IGNORECASE))
+        if len(keyed) > 1:
+            return len(keyed)
+        header_keyed = set(re.findall(r'^[\s>#*_-]*SECTION\s+(\d+)', plan,
+                                      re.IGNORECASE | re.MULTILINE))
+        if header_keyed:
+            return max(1, len(header_keyed))
+        nums = set(re.findall(r'^\s*(\d+)[.:)]', plan, re.MULTILINE))
+        return max(1, len(nums), len(keyed))
 
     def _run_revise_setup(self, brief: str, source_story: str, rewrite_notes: str,
                           target_length: str, target_audience: str, world_rules: str,
@@ -371,7 +385,9 @@ class WritingCouncil:
         canon_sheet: str = "",
         world_bible: str = "",
         brief: str = "",
+        rewrite_mode: str = "",
         rewrite_notes: str = "",
+        source_words: int = 0,
         seeded: bool = False,
     ) -> tuple:
         """Returns (plan, story, non_earth, canon_sheet, world_bible, planning_details)."""
@@ -390,8 +406,17 @@ class WritingCouncil:
             # ---- Initial call (from Outer): 1 generates plan, 2 writes ----
             print(f"[{label}] Running PlanningAgent (initial plan)...")
             image_desc = ", ".join(image) if isinstance(image, list) else image
+            # A rewrite records what it was a rewrite of, in the same shape
+            # _run_revise_setup uses. Omitted entirely on a fresh run, which must
+            # keep its planning_details byte-for-byte what it always was.
+            rewrite_block = (
+                f"rewrite_mode: {rewrite_mode}\n"
+                f"rewrite_notes: {rewrite_notes or '(none)'}\n"
+                f"source_words: {source_words}\n"
+            ) if rewrite_mode else ""
             input_text = (
                 f"title: {title or '(none)'}\n"
+                f"{rewrite_block}"
                 f"idea: {idea}\ntarget_length: {target_length}\n"
                 f"target_audience: {target_audience}\n"
                 f"world_rules: {world_rules or '(none)'}\n"

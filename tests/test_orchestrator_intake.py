@@ -122,10 +122,48 @@ def test_unknown_mode_raises_before_any_api_call():
 def test_oversized_source_refuses_with_the_count():
     council = _mock_council()
     huge = "word " * (MAX_SOURCE_WORDS + 1)
-    with pytest.raises(ValueError, match=str(MAX_SOURCE_WORDS)):
+    # Both numbers in the message are thousands-separated, so match the digits
+    # with separators optional rather than pinning one rendering.
+    pattern = r"[\d,]*".join(str(MAX_SOURCE_WORDS))
+    with pytest.raises(ValueError, match=pattern):
         council.run(idea="", target_length="", target_audience="Adults",
                     source_story=huge, prose_passes=0)
     council.intake.run.assert_not_called()
+
+
+def test_oversized_source_message_separates_both_numbers():
+    """The count and the limit are rendered the same way, not one of each."""
+    council = _mock_council()
+    huge = "word " * (MAX_SOURCE_WORDS + 1)
+    with pytest.raises(ValueError) as excinfo:
+        council.run(idea="", target_length="", target_audience="Adults",
+                    source_story=huge, prose_passes=0)
+    assert f"{MAX_SOURCE_WORDS:,}" in str(excinfo.value)
+    assert str(MAX_SOURCE_WORDS) not in str(excinfo.value)
+
+
+def test_reimagine_planning_details_record_the_rewrite():
+    """The log and the UI's planning-details panel must show a reimagine run was
+    a rewrite at all — the revise path already records this."""
+    council = _mock_council()
+    result = council.run(idea="", target_length="", target_audience="Adults",
+                         source_story="one two three", rewrite_mode="reimagine",
+                         rewrite_notes="darker ending", prose_passes=0)
+    details = result["planning_details"]
+    assert "rewrite_mode: reimagine" in details
+    assert "darker ending" in details
+    assert "source_words: 3" in details
+
+
+def test_fresh_run_planning_details_carry_no_rewrite_lines():
+    """The regression guarantee: a run without a source story is unchanged."""
+    council = _mock_council()
+    result = council.run(idea="a fresh idea", target_length="8,000 words",
+                         target_audience="Adults", prose_passes=0)
+    details = result["planning_details"]
+    assert "rewrite_mode" not in details
+    assert "source_words" not in details
+    assert details.startswith("title: (none)\nidea: a fresh idea")
 
 
 def test_rewrite_notes_reach_both_intake_and_the_planner():

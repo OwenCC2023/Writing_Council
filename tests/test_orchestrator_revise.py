@@ -99,6 +99,39 @@ def test_non_earth_revise_builds_the_world_but_skips_the_bible_plan_revision():
     council.planner.revise_with_world_bible.assert_not_called()
 
 
+def test_non_earth_revise_seeds_the_world_into_the_first_writer_revise():
+    """canon_sheet/world_bible built during revise setup must survive the hand-off
+    into _run_inner's seeded branch, or the writer revises the alien draft blind."""
+    council = _revise_council(plan_output="<<<WORLD_CLASS: NON-EARTH>>>\nplan text")
+    council.run(idea="", target_length="", target_audience="Adults",
+                source_story=_STORY, rewrite_mode="revise", prose_passes=0)
+    # writer.revise runs several times per run; the seeded inner pass is first.
+    kwargs = council.writer.revise.call_args_list[0].kwargs
+    assert kwargs["canon_sheet"] == "canon"
+    assert kwargs["world_bible"] == "bible"
+
+
+def test_non_earth_revise_adds_strangeness_and_sensory_to_the_fan_out():
+    council = _revise_council(plan_output="<<<WORLD_CLASS: NON-EARTH>>>\nplan text")
+    council.run(idea="", target_length="", target_audience="Adults",
+                source_story=_STORY, rewrite_mode="revise", prose_passes=0)
+    assert council.strangeness.run.called
+    assert council.sensory.run.called
+    # The seeded fan-out sees the marked original and the canon (never the bible).
+    first = council.strangeness.run.call_args_list[0].kwargs
+    assert "<<<SECTION 1>>>" in first["story"]
+    assert first["canon_sheet"] == "canon"
+    assert council.sensory.run.call_args_list[0].kwargs["canon_sheet"] == "canon"
+
+
+def test_earth_revise_leaves_the_alien_reviewers_out():
+    council = _revise_council()
+    council.run(idea="", target_length="", target_audience="Adults",
+                source_story=_STORY, rewrite_mode="revise", prose_passes=0)
+    council.strangeness.run.assert_not_called()
+    council.sensory.run.assert_not_called()
+
+
 def test_world_builder_receives_the_merged_idea():
     council = _revise_council(plan_output="<<<WORLD_CLASS: NON-EARTH>>>\nplan text")
     council.run(idea="my own idea", target_length="", target_audience="Adults",
@@ -148,6 +181,22 @@ def test_count_plan_sections_ignores_numbered_sub_lists():
         "1. he answers\n2. he lies\n"
     )
     assert council._count_plan_sections(plan) == 2
+
+
+def test_count_plan_sections_ignores_a_stray_prose_mention_of_a_section():
+    """One in-prose "section 2" must not collapse a bare-numbered plan to 1."""
+    council = WritingCouncil()
+    plan = ("1. Opening\n"
+            "2. Turn — this is where section 1's promise pays off\n"
+            "3. Close\n")
+    assert council._count_plan_sections(plan) == 3
+
+
+def test_count_plan_sections_trusts_a_lone_header_shaped_section():
+    """A real one-section plan stays 1 even with a numbered sub-list under it."""
+    council = WritingCouncil()
+    plan = "**SECTION 1: The whole thing**\n1. she arrives\n2. she waits\n3. she goes\n"
+    assert council._count_plan_sections(plan) == 1
 
 
 def test_revise_returns_populated_planning_details():
