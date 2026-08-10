@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from orchestrator import WritingCouncil
@@ -50,7 +51,12 @@ WORLD_RULES = """
 def main() -> None:
     """Run a real council pass and save the manuscript. Billed and long —
     only runs when this file is executed directly, never on import."""
-    source_story = load_story_text(SOURCE_STORY_PATH) if SOURCE_STORY_PATH else ""
+    try:
+        source_story = load_story_text(SOURCE_STORY_PATH) if SOURCE_STORY_PATH else ""
+    except (ValueError, FileNotFoundError) as exc:
+        # A bad SOURCE_STORY_PATH is a config typo; say so instead of a traceback.
+        print(f"Could not read SOURCE_STORY_PATH: {exc}")
+        sys.exit(1)
 
     council = WritingCouncil()
     result = council.run(
