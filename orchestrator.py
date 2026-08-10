@@ -22,7 +22,7 @@ from agents.intake_agent import IntakeAgent, parse_brief
 from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
-from story_intake import word_count
+from story_intake import bump_title_version, word_count
 
 LOGS_DIR = Path(__file__).parent / "logs"
 
@@ -86,13 +86,19 @@ class WritingCouncil:
 
         Craft params only. target_audience, style, and constraint have no brief
         fallback — the user owns them.
+
+        A title inherited from the original (the brief's own TITLE, or the
+        uploaded filename) advances its version marker, since a rewrite is a
+        new version of the story it came from. A typed title is used verbatim,
+        like every other user-supplied value.
         """
+        inherited_title = fields.get("TITLE", "") or filename_stem
         return {
             "idea": idea or fields.get("SYNOPSIS", ""),
             "world_rules": world_rules or fields.get("WORLD RULES", ""),
             "framework": framework or fields.get("STORYLINE/STRUCTURE", ""),
             "target_length": target_length or fields.get("LENGTH", ""),
-            "title": title or fields.get("TITLE", "") or filename_stem,
+            "title": title or bump_title_version(inherited_title),
         }
 
     def run(

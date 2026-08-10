@@ -59,7 +59,8 @@ def test_merge_falls_back_to_the_brief_when_a_field_is_blank():
     assert merged["idea"].startswith("A doomed empire")
     assert merged["target_length"] == "8432 words"
     assert "hyperlanes" in merged["world_rules"]
-    assert merged["title"] == "The Sforzato"
+    # Inherited from the brief, so its version marker advances.
+    assert merged["title"] == "The Sforzato v2"
 
 
 def test_merge_uses_the_filename_stem_when_the_brief_has_no_title():
@@ -69,7 +70,7 @@ def test_merge_uses_the_filename_stem_when_the_brief_has_no_title():
     fields["TITLE"] = ""
     merged = council._merge_brief(fields, idea="", world_rules="", framework="",
                                   target_length="", title="", filename_stem="my_upload")
-    assert merged["title"] == "my_upload"
+    assert merged["title"] == "my_upload_v2"
 
 
 def test_reimagine_sends_the_whole_brief_and_never_the_prose():
@@ -99,7 +100,7 @@ def test_result_carries_the_brief_mode_and_resolved_fields():
                          source_story="prose", prose_passes=0)
     assert result["intake_brief"] == _BRIEF
     assert result["rewrite_mode"] == "reimagine"
-    assert result["title"] == "The Sforzato"
+    assert result["title"] == "The Sforzato v2"
     assert result["target_length"] == "8432 words"
 
 
@@ -140,3 +141,31 @@ def test_writer_budget_scales_with_a_long_target():
     council.run(idea="a fresh idea", target_length="20,000 words",
                 target_audience="Adults", prose_passes=0)
     assert council.writer.run.call_args.kwargs["max_tokens"] == 28000
+
+
+# --- Rewrite titles advance their version marker ---
+
+def _merge_title(council, *, user_title="", brief_title="The Sforzato", stem="upload"):
+    from agents.intake_agent import parse_brief
+    fields = parse_brief(_BRIEF)
+    fields["TITLE"] = brief_title
+    return council._merge_brief(
+        fields, idea="", world_rules="", framework="", target_length="",
+        title=user_title, filename_stem=stem)["title"]
+
+
+def test_merge_bumps_a_title_inherited_from_the_brief():
+    council = WritingCouncil()
+    assert _merge_title(council, brief_title="The Sforzato") == "The Sforzato v2"
+    assert _merge_title(council, brief_title="The Sforzato v2.3") == "The Sforzato v3.0"
+
+
+def test_merge_bumps_a_title_inherited_from_the_filename_stem():
+    council = WritingCouncil()
+    assert _merge_title(council, brief_title="", stem="sforzato_v2_3") == "sforzato_v3"
+
+
+def test_merge_leaves_a_user_supplied_title_verbatim():
+    """A typed title wins untouched, the same as every other craft param."""
+    council = WritingCouncil()
+    assert _merge_title(council, user_title="The Sforzato v2") == "The Sforzato v2"

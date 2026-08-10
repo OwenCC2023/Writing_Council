@@ -160,6 +160,13 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   doesn't enforce a length cap. `MAX_SOURCE_WORDS` (110,000 words) is enforced in
   `WritingCouncil.run` and raises; `REVISE_WARN_WORDS` (20,000 words) only warns, since
   revise re-sends the full draft to the writer and every checker on each pass.
+- A title inherited from the original — the brief's `TITLE`, else the uploaded filename
+  stem — advances its version marker via `story_intake.bump_title_version`, since a
+  rewrite is a new version of what it came from: `The Sforzato` → `The Sforzato v2`,
+  `v2` → `v3`, `v2.3` → `v3.0` (dotted: lower components zeroed), `sforzato_v2_3` →
+  `sforzato_v3` (underscored: lower components dropped). Only the highest-placed
+  component advances. A marker must be `v`-prefixed, so `Blade Runner 2049` is treated
+  as a title, not a version. A user-typed title is used verbatim — no bump.
 - `run()` returns `intake_brief`, `rewrite_mode`, and the resolved `title` and
   `target_length` (post-merge) alongside the usual `story`/`non_earth`/`planning_details`.
 - `server.py`'s `/run` accepts `story_file` (uploaded, written to a temp path and cleaned
