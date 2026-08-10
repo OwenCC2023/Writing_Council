@@ -106,6 +106,50 @@ def test_world_builder_receives_the_merged_idea():
     assert council.world_builder.run.call_args.kwargs["idea"] == "my own idea"
 
 
+def test_revise_forwards_the_image_to_the_planner():
+    council = _revise_council()
+    council.run(idea="", target_length="", target_audience="Adults",
+                source_story=_STORY, rewrite_mode="revise", prose_passes=0,
+                image="photo.jpg")
+    assert council.planner.run.call_args.kwargs["image"] == "photo.jpg"
+
+
+def test_revise_planning_details_echo_the_image():
+    council = _revise_council()
+    result = council.run(idea="", target_length="", target_audience="Adults",
+                         source_story=_STORY, rewrite_mode="revise", prose_passes=0,
+                         image=["a.jpg", "b.png"])
+    assert "a.jpg" in result["planning_details"]
+    assert "b.png" in result["planning_details"]
+
+
+def test_count_plan_sections_reads_decorated_section_headers():
+    council = WritingCouncil()
+    assert council._count_plan_sections(
+        "**SECTION 1: Opening**\nbeat\n**SECTION 2: Turn**\nbeat") == 2
+    assert council._count_plan_sections(
+        "## SECTION 1\nbeat\n\n## SECTION 2\nbeat\n\n## SECTION 3\nbeat") == 3
+    assert council._count_plan_sections(
+        "SECTION 1: Opening\nSECTION 2: Turn") == 2
+
+
+def test_count_plan_sections_still_reads_bare_numbering():
+    council = WritingCouncil()
+    assert council._count_plan_sections("1. Opening\n2. Turn\n3. Close") == 3
+
+
+def test_count_plan_sections_ignores_numbered_sub_lists():
+    council = WritingCouncil()
+    plan = (
+        "**SECTION 1: Opening**\n"
+        "How it escalates: stake\n"
+        "1. she arrives\n2. she waits\n3. she leaves\n"
+        "**SECTION 2: Turn**\n"
+        "1. he answers\n2. he lies\n"
+    )
+    assert council._count_plan_sections(plan) == 2
+
+
 def test_revise_returns_populated_planning_details():
     council = _revise_council()
     result = council.run(idea="", target_length="", target_audience="Adults",
