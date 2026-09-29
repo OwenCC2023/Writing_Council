@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent, DEFAULT_MODEL
+from .base_agent import ANALYSIS_EFFORT, BaseAgent, DEFAULT_MODEL
 from .world_calibration import with_canon
 
 SYSTEM_PROMPT_TEMPLATE = """\
@@ -68,5 +68,5 @@ class VarianceReviewerAgent(BaseAgent):
             f"Report the {top_n} most-repeated techniques across this manuscript, with "
             "counts, section spread, and the instances to cut."
         )
-        output = self._call_claude(system_prompt, user_prompt)
+        output = self._call_claude(system_prompt, user_prompt, effort=ANALYSIS_EFFORT)
         return {"agent": "VarianceReviewerAgent", "output": output}

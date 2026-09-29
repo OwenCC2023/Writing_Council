@@ -47,6 +47,12 @@ _EFFORT_BY_MODEL = {
 }
 _THINKING_DISABLED = {"type": "disabled"}
 
+# Effort for the Sonnet calls whose job is counting or synthesis rather than prose:
+# tallying one construction across a whole manuscript, holding a per-section density
+# band, and merging several reviewers into one fix list without dropping a finding.
+# `low` skips thinking on most requests, and those are the calls that need it.
+ANALYSIS_EFFORT = "medium"
+
 # Thinking counts toward max_tokens even though its text isn't returned, so a
 # budget sized for the prose alone would cut the story off. Headroom is only
 # billed when used.
@@ -62,11 +68,17 @@ class RefusalError(RuntimeError):
     """The model (and any fallback) declined the request."""
 
 
-def _request_params(model: str, max_tokens: int) -> dict:
-    """Model-specific thinking / effort / fallback settings for one call."""
-    effort = _EFFORT_BY_MODEL.get(model)
-    if effort is None:
+def _request_params(model: str, max_tokens: int, effort: str = None) -> dict:
+    """Model-specific thinking / effort / fallback settings for one call.
+
+    `effort` overrides the model's default level, and is ignored on a model with
+    no `_EFFORT_BY_MODEL` entry — those run thinking-disabled, where an effort
+    field is at best meaningless (Haiku 4.5 rejects it).
+    """
+    default = _EFFORT_BY_MODEL.get(model)
+    if default is None:
         return {"max_tokens": max_tokens, "thinking": _THINKING_DISABLED}
+    effort = effort or default
     return {
         "max_tokens": max_tokens + THINKING_HEADROOM,
         "output_config": {"effort": effort},
@@ -107,7 +119,8 @@ class BaseAgent:
                 return block.text
         return response.content[0].text
 
-    def _send(self, model: str, max_tokens: int, system_prompt: str, content) -> str:
+    def _send(self, model: str, max_tokens: int, system_prompt: str, content,
+              effort: str = None) -> str:
         """Stream one request and return its text. Streaming because the SDK
         refuses a non-streaming call whose max_tokens could run past ten
         minutes (~21k tokens), which thinking headroom on a long write crosses."""
@@ -115,7 +128,7 @@ class BaseAgent:
             model=model,
             system=system_prompt,
             messages=[{"role": "user", "content": content}],
-            **_request_params(model, max_tokens),
+            **_request_params(model, max_tokens, effort),
         ) as stream:
             response = stream.get_final_message()
         return self._first_text(response)
@@ -126,9 +139,11 @@ class BaseAgent:
         user_prompt: str,
         model: str = None,
         max_tokens: int = 8192,
+        effort: str = None,
     ) -> str:
         """Send a prompt to Claude and return the text response."""
-        return self._send(model or self.model, max_tokens, system_prompt, user_prompt)
+        return self._send(model or self.model, max_tokens, system_prompt, user_prompt,
+                          effort=effort)
 
     def _call_claude_with_image(
         self,

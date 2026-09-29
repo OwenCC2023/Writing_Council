@@ -1,4 +1,4 @@
-from .base_agent import BaseAgent, DEFAULT_MODEL
+from .base_agent import ANALYSIS_EFFORT, BaseAgent, DEFAULT_MODEL
 from .world_calibration import with_canon
 
 # Two-sided band for concrete non-visual sensory details per section. The lower bound
@@ -65,5 +65,5 @@ class SensoryQuotaAgent(BaseAgent):
             "Report concrete-sensory density per section against the band, flag banned "
             "abstractions, and report register repetition across the manuscript."
         )
-        output = self._call_claude(system_prompt, user_prompt)
+        output = self._call_claude(system_prompt, user_prompt, effort=ANALYSIS_EFFORT)
         return {"agent": "SensoryQuotaAgent", "output": output}

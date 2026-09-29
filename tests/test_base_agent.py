@@ -118,3 +118,38 @@ def test_malformed_numeric_input_returns_the_floor():
     no digits after stripping. These should return floor, not raise ValueError."""
     assert max_tokens_for(",", 16000) == 16000
     assert max_tokens_for(",,,", 8192) == 8192
+
+
+def test_effort_override_replaces_the_model_default():
+    agent, stream = _agent_returning(_response(_text("ok")))
+    agent._call_claude("sys", "user", effort="medium")
+    assert stream.call_args.kwargs["output_config"] == {"effort": "medium"}
+
+
+def test_effort_override_is_ignored_on_a_thinking_disabled_model():
+    agent, stream = _agent_returning(_response(_text("ok")), model=FEEDBACK_MODEL)
+    agent._call_claude("sys", "user", effort="medium")
+    kwargs = stream.call_args.kwargs
+    assert kwargs["thinking"] == {"type": "disabled"}
+    assert "output_config" not in kwargs
+
+
+def test_analysis_calls_run_at_analysis_effort():
+    from unittest.mock import patch
+    from agents.base_agent import ANALYSIS_EFFORT
+    from agents.planning_agent import PlanningAgent
+    from agents.sensory_agent import SensoryQuotaAgent
+    from agents.variance_agent import VarianceReviewerAgent
+
+    calls = [
+        (VarianceReviewerAgent, lambda a: a.run(story="S")),
+        (SensoryQuotaAgent, lambda a: a.run(story="S")),
+        (PlanningAgent, lambda a: a.plan_revision(story="S", plan="P", feedbacks=["f"])),
+        (PlanningAgent, lambda a: a.plan_revision_prose(
+            story="S", plan="P", prose_feedback="p", consistency_feedback="c")),
+    ]
+    for cls, invoke in calls:
+        agent = cls()
+        with patch.object(agent, "_call_claude", return_value="out") as m:
+            invoke(agent)
+        assert m.call_args.kwargs["effort"] == ANALYSIS_EFFORT, cls.__name__
