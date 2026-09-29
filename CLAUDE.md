@@ -33,13 +33,21 @@ billed — never start a real council run just to verify code; the tests mock th
 - `agents/` — one class per agent, all subclassing `agents/base_agent.py:BaseAgent`
   (shared Anthropic client; `_call_claude` and `_call_claude_with_image`).
   System prompts live as module-level string constants in each agent file.
-- Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (`claude-sonnet-5`) for
+- Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (`claude-sonnet-5-5`) for
   planner/writer, `FEEDBACK_MODEL` (`claude-haiku-4-5`) for reviewers,
-  `INITIAL_DRAFT_MODEL` (`claude-opus-5`) for the first plan + first write only.
-  These are the Sonnet 5 / Opus 5 family, which runs adaptive thinking on by default when
-  `thinking` is omitted; `_call_claude`/`_call_claude_with_image` pass
-  `thinking={"type": "disabled"}` to keep behavior controlled and extract the first text
-  block defensively (`_first_text`) rather than indexing `content[0]`.
+  `INITIAL_DRAFT_MODEL` (`claude-opus-5-5`) for the first plan + first write only.
+  **Thinking can't be disabled on the 5.5 family** — `{"type": "disabled"}` is a 400 on
+  both — so `_request_params(model, max_tokens)` picks per model: Opus 5.5 at effort
+  `medium` (set explicitly; the API default dropped from Opus 5's `high`), Sonnet 5.5
+  adaptive at effort `low`, anything else (Haiku, a test override) keeps thinking disabled.
+  The 5.5 models also get `THINKING_HEADROOM` (16k) on `max_tokens` — thinking counts
+  toward the limit — and server-side refusal fallback (`fallbacks: "default"`, beta
+  `server-side-fallback-2026-07-01`). Both call methods go through `_send`, which
+  **streams** (`beta.messages.stream` → `get_final_message`): the SDK refuses non-streaming
+  `max_tokens` above ~21k. `_first_text` raises `RefusalError` (with the category) on a
+  refusal that survives fallback and reads blocks by type, since a response can open with
+  a thinking block. New models need an `_EFFORT_BY_MODEL` entry or they fall back to
+  disabled thinking (a 400 on any model that rejects it).
   `PlanningAgent.run`/`WriterAgent.run` take an optional
   `model` override (falls back to `self.model`); the orchestrator passes
   `INITIAL_DRAFT_MODEL` at those two initial call sites, so on an EARTH run all revisions
