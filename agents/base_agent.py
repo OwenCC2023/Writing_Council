@@ -7,11 +7,11 @@ import anthropic
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DEFAULT_MODEL = "claude-sonnet-5"
+DEFAULT_MODEL = "claude-sonnet-5-5"
 FEEDBACK_MODEL = "claude-haiku-4-5"
 # Model for the initial plan + initial write only (Outer's first inner call).
 # Revisions and reviewers keep their own models.
-INITIAL_DRAFT_MODEL = "claude-opus-5"
+INITIAL_DRAFT_MODEL = "claude-opus-5-5"
 
 # Output ceiling. Prose runs ~1.4 tokens per word; the ceiling keeps a runaway
 # target from requesting more than the API will return.
@@ -34,12 +34,45 @@ def max_tokens_for(target_length: str, floor: int) -> int:
     words = int(digits)
     return max(floor, min(int(words * _TOKENS_PER_WORD), MAX_OUTPUT_TOKENS))
 
-# The Sonnet 5 / Opus 5 family runs adaptive thinking on by default when the
-# `thinking` field is omitted, which would (a) place a thinking block at
-# content[0] and (b) spend output tokens on reasoning. We keep the pipeline's
-# behavior controlled by disabling thinking on every call. Text extraction also
-# tolerates a leading non-text block defensively.
+# Thinking is not optional on the 5.5 family: `{"type": "disabled"}` is a 400 on
+# both Opus 5.5 and Sonnet 5.5, so effort is the only control. Opus 5.5's API
+# default is `medium` (one level below Opus 5's `high`); it is set explicitly so
+# the default can't move under us. Sonnet 5.5 runs at `low`, where it skips
+# thinking on most simple requests. Any other model (Haiku reviewers, a test's
+# override) keeps thinking disabled, as before. Text extraction reads blocks by
+# type, since a response can open with a thinking block.
+_EFFORT_BY_MODEL = {
+    "claude-opus-5-5": "medium",
+    "claude-sonnet-5-5": "low",
+}
 _THINKING_DISABLED = {"type": "disabled"}
+
+# Thinking counts toward max_tokens even though its text isn't returned, so a
+# budget sized for the prose alone would cut the story off. Headroom is only
+# billed when used.
+THINKING_HEADROOM = 16000
+
+# On a safety-classifier decline, re-run the request on the model Anthropic
+# recommends for that refusal category, inside the same call. A false positive
+# on dark fiction otherwise kills a run minutes and dollars in.
+_FALLBACK_BETA = "server-side-fallback-2026-07-01"
+
+
+class RefusalError(RuntimeError):
+    """The model (and any fallback) declined the request."""
+
+
+def _request_params(model: str, max_tokens: int) -> dict:
+    """Model-specific thinking / effort / fallback settings for one call."""
+    effort = _EFFORT_BY_MODEL.get(model)
+    if effort is None:
+        return {"max_tokens": max_tokens, "thinking": _THINKING_DISABLED}
+    return {
+        "max_tokens": max_tokens + THINKING_HEADROOM,
+        "output_config": {"effort": effort},
+        "betas": [_FALLBACK_BETA],
+        "extra_body": {"fallbacks": "default"},
+    }
 
 _IMAGE_MEDIA_TYPES = {
     ".jpg": "image/jpeg",
@@ -60,11 +93,32 @@ class BaseAgent:
     @staticmethod
     def _first_text(response) -> str:
         """Return the first text block's text, tolerating a leading non-text
-        (e.g. thinking) block. Falls back to content[0].text."""
+        (e.g. thinking) block. Raises RefusalError on a classifier decline,
+        whose content may hold no text at all."""
+        if getattr(response, "stop_reason", None) == "refusal":
+            details = getattr(response, "stop_details", None)
+            category = getattr(details, "category", None) or "unspecified"
+            raise RefusalError(
+                f"{getattr(response, 'model', 'model')} declined the request "
+                f"(refusal category: {category})"
+            )
         for block in response.content:
             if getattr(block, "type", None) == "text":
                 return block.text
         return response.content[0].text
+
+    def _send(self, model: str, max_tokens: int, system_prompt: str, content) -> str:
+        """Stream one request and return its text. Streaming because the SDK
+        refuses a non-streaming call whose max_tokens could run past ten
+        minutes (~21k tokens), which thinking headroom on a long write crosses."""
+        with self.client.beta.messages.stream(
+            model=model,
+            system=system_prompt,
+            messages=[{"role": "user", "content": content}],
+            **_request_params(model, max_tokens),
+        ) as stream:
+            response = stream.get_final_message()
+        return self._first_text(response)
 
     def _call_claude(
         self,
@@ -74,14 +128,7 @@ class BaseAgent:
         max_tokens: int = 8192,
     ) -> str:
         """Send a prompt to Claude and return the text response."""
-        response = self.client.messages.create(
-            model=model or self.model,
-            max_tokens=max_tokens,
-            thinking=_THINKING_DISABLED,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-        )
-        return self._first_text(response)
+        return self._send(model or self.model, max_tokens, system_prompt, user_prompt)
 
     def _call_claude_with_image(
         self,
@@ -118,11 +165,4 @@ class BaseAgent:
                 })
 
         content = [*image_blocks, {"type": "text", "text": user_prompt}]
-        response = self.client.messages.create(
-            model=model or self.model,
-            max_tokens=max_tokens,
-            thinking=_THINKING_DISABLED,
-            system=system_prompt,
-            messages=[{"role": "user", "content": content}],
-        )
-        return self._first_text(response)
+        return self._send(model or self.model, max_tokens, system_prompt, content)
