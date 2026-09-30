@@ -98,3 +98,10 @@ def test_run_returns_expected_shape():
     agent = IntakeAgent()
     with patch.object(agent, "_call_claude", return_value=_BRIEF):
         assert agent.run(story="x") == {"agent": "IntakeAgent", "output": _BRIEF}
+
+
+def test_world_class_guess_offers_all_three_tiers():
+    from agents.intake_agent import SYSTEM_PROMPT
+    guess_line = next(l for l in SYSTEM_PROMPT.splitlines()
+                      if l.startswith("WORLD_CLASS_GUESS:"))
+    assert "EARTH, SECONDARY, or NON-EARTH" in guess_line

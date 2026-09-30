@@ -31,11 +31,13 @@ field name ends it.
 
 === STORY BRIEF ===
 TITLE: the story's own title, or leave blank if it has none
-WORLD_CLASS_GUESS: EARTH or NON-EARTH, then an em dash and one line of why. EARTH means \
-contemporary or familiar-historical Earth; NON-EARTH means off-Earth, or an Earth far \
-enough from present-day common experience (far future, deep past, radically altered) that \
-its sensory texture falls outside ordinary experience. This is advisory — a later agent \
-makes the binding call.
+WORLD_CLASS_GUESS: EARTH, SECONDARY, or NON-EARTH, then an em dash and one line of why. \
+Classify by sensory ground: would a reader's body know this room? EARTH means contemporary \
+or familiar-historical Earth. SECONDARY means ordinary sensory ground with a bounded, \
+listable set of departures on top of it (magic in a real city, alternate history, near \
+future). NON-EARTH means a world whose sensory texture itself falls outside ordinary \
+experience and must be built before it can be written (another planet, far future, deep \
+past). This is advisory — a later agent makes the binding call.
 GENRE: the genre as a publisher would shelve it
 SETTING: where and when, concretely
 WORLD RULES: every way this world departs from ours — physics, technology, biology, \

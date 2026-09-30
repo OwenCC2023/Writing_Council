@@ -40,6 +40,9 @@ billed — never start a real council run just to verify code; the tests mock th
   both — so `_request_params(model, max_tokens)` picks per model: Opus 5.5 at effort
   `medium` (set explicitly; the API default dropped from Opus 5's `high`), Sonnet 5.5
   adaptive at effort `low`, anything else (Haiku, a test override) keeps thinking disabled.
+  `_call_claude(effort=...)` overrides the level (ignored on thinking-disabled models);
+  the counting/synthesis calls — Variance, Sensory, `plan_revision`, `plan_revision_prose`
+  — pass `ANALYSIS_EFFORT` (`medium`), since `low` skips thinking on most requests.
   The 5.5 models also get `THINKING_HEADROOM` (16k) on `max_tokens` — thinking counts
   toward the limit — and server-side refusal fallback (`fallbacks: "default"`, beta
   `server-side-fallback-2026-07-01`). Both call methods go through `_send`, which
