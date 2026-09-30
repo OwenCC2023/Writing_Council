@@ -149,9 +149,11 @@ def test_only_sensory_raises_effort_among_the_analysis_calls():
     ]
     for cls, invoke, expected in calls:
         agent = cls()
-        with patch.object(agent, "_call_claude", return_value="out") as m:
+        with patch.object(agent, "_call_claude", return_value="out") as m, \
+             patch.object(agent, "_call_claude_json", return_value={}) as mj:
             invoke(agent)
-        assert m.call_args.kwargs.get("effort") == expected, cls.__name__
+        called = m if m.called else mj
+        assert called.call_args.kwargs.get("effort") == expected, cls.__name__
 
 
 SCHEMA = {"type": "object", "properties": {"x": {"type": "string"}},

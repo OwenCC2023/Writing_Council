@@ -28,7 +28,7 @@ def _mock_council():
     council.consistency.run = MagicMock(return_value={"agent": "ConsistencyAgent", "output": "c"})
     council.ai_checker.run = MagicMock(return_value={"agent": "AIFailureCheckerAgent", "output": "a"})
     council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
-    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
+    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
     # The middle loop always runs regardless of prose_passes; mock its four

@@ -42,7 +42,7 @@ def _revise_council(plan_output="<<<WORLD_CLASS: EARTH>>>\nplan text"):
     council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
     council.strangeness.run = MagicMock(return_value={"agent": "StrangenessReviewerAgent", "output": "s"})
     council.sensory.run = MagicMock(return_value={"agent": "SensoryQuotaAgent", "output": "q"})
-    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
+    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
     council.peer_writer.run = MagicMock(return_value={"agent": "PeerWriterAgent", "output": "p"})

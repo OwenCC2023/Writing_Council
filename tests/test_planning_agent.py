@@ -1,30 +1,33 @@
 from unittest.mock import patch
 
 from agents.base_agent import INITIAL_DRAFT_MODEL
-from agents.planning_agent import PlanningAgent, REVISION_PLAN_SYSTEM_PROMPT
+from agents.planning_agent import (
+    PROSE_REVISION_SCHEMA, REVISION_PLAN_SCHEMA, REVISION_PLAN_SYSTEM_PROMPT, PlanningAgent)
 
-_THREE_BLOCK = (
-    "=== STRUCTURAL OPERATIONS ===\nNONE\n"
-    "=== SECTION REVISIONS ===\nSECTION 1: cut the simile\n"
-    "=== GENERAL NOTES ===\nNONE"
-)
+_PROSE_RAW = {"section_revisions": [{"section": 1, "instruction": "cut the simile"}]}
+_EMPTY = {"structural_operations": [], "section_revisions": [], "general_notes": ""}
 
 
 def test_plan_revision_prose_returns_expected_shape():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value=_THREE_BLOCK):
+    with patch.object(agent, "_call_claude_json", return_value=_PROSE_RAW) as m:
         result = agent.plan_revision_prose(
             story="<<<SECTION 1>>>\nHi.",
             plan="the plan",
             prose_feedback="1. AI dialect in section 1",
             consistency_feedback="no issues",
         )
-    assert result == {"agent": "PlanningAgent", "output": _THREE_BLOCK}
+    assert m.call_args.args[2] is PROSE_REVISION_SCHEMA
+    assert result["agent"] == "PlanningAgent"
+    assert result["revision"] == {
+        "structural_operations": [], "general_notes": "",
+        "section_revisions": [{"section": 1, "instruction": "cut the simile"}]}
+    assert '"cut the simile"' in result["output"]   # the log gets readable JSON
 
 
 def test_plan_revision_prose_prompt_carries_force_and_pins():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="x") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision_prose(
             story="<<<SECTION 1>>>\nHi.", plan="p",
             prose_feedback="findings", consistency_feedback="cons",
@@ -32,9 +35,10 @@ def test_plan_revision_prose_prompt_carries_force_and_pins():
     system_prompt = m.call_args.args[0]
     user_prompt = m.call_args.args[1]
     assert "FORCE ALL FIXES" in system_prompt
-    assert "ONE LINE PER SECTION" in system_prompt
-    assert "STRUCTURAL OPERATIONS is always NONE" in system_prompt
-    assert "GENERAL NOTES is always NONE" in system_prompt
+    # The schema has nowhere to put moves, merges, or general notes, and Python merges
+    # a section's split entries, so none of the old format policing is left.
+    assert "NONE" not in system_prompt and "===" not in system_prompt
+    assert "ONE LINE PER SECTION" not in system_prompt
     assert "findings" in user_prompt        # prose feedback threaded in
     assert "cons" in user_prompt            # consistency feedback threaded in
 
@@ -80,14 +84,14 @@ def test_revise_with_world_bible_uses_opus_and_passes_inputs():
 
 def test_plan_revision_earth_prompt_unchanged():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="out") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision(story="s", plan="p", feedbacks=["f"])
     assert m.call_args.args[0] == REVISION_PLAN_SYSTEM_PROMPT   # exact, unchanged
 
 
 def test_plan_revision_canon_aware_adds_bucket_clause():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="out") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision(story="s", plan="p", feedbacks=["f"], canon_aware=True)
     sp = m.call_args.args[0]
     assert sp != REVISION_PLAN_SYSTEM_PROMPT
@@ -96,7 +100,7 @@ def test_plan_revision_canon_aware_adds_bucket_clause():
 
 def test_plan_revision_prose_canon_aware_drops_world_tag():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="out") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="pf",
                                   consistency_feedback="cf", canon_aware=True)
     assert "[WORLD]" in m.call_args.args[0]
@@ -153,7 +157,7 @@ def test_plan_existing_addendum_overrides_non_earth_chunking():
 
 def test_plan_revision_prose_threads_variance_feedback_as_force_fixed():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="x") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision_prose(
             story="<<<SECTION 1>>>\nHi.", plan="p",
             prose_feedback="findings", consistency_feedback="cons",
@@ -168,7 +172,7 @@ def test_plan_revision_prose_threads_variance_feedback_as_force_fixed():
 
 def test_plan_revision_prose_omits_variance_block_when_empty():
     agent = PlanningAgent()
-    with patch.object(agent, "_call_claude", return_value="x") as m:
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
         agent.plan_revision_prose(story="s", plan="p", prose_feedback="f",
                                   consistency_feedback="c")
     assert "REPEATED-TECHNIQUE" not in m.call_args.args[1]
@@ -212,3 +216,43 @@ def test_fix_plan_length_prompt_forbids_padding_the_numbers():
            "counted, not estimated" in LENGTH_FIX_SYSTEM_PROMPT
     assert "do NOT pad" in LENGTH_FIX_SYSTEM_PROMPT
     assert "budget correction, not a re-conception" in LENGTH_FIX_SYSTEM_PROMPT
+
+
+def test_plan_revision_uses_the_full_schema():
+    agent = PlanningAgent()
+    with patch.object(agent, "_call_claude_json", return_value=_EMPTY) as m:
+        agent.plan_revision(story="s", plan="p", feedbacks=["f"])
+    assert m.call_args.args[2] is REVISION_PLAN_SCHEMA
+
+
+def test_split_entries_for_one_section_are_merged_not_overwritten():
+    """The old line format silently kept only the last SECTION N line."""
+    agent = PlanningAgent()
+    raw = {"structural_operations": [], "general_notes": "NONE", "section_revisions": [
+        {"section": 3, "instruction": "fix A"},
+        {"section": 1, "instruction": "  cut\nthe   dream  "},
+        {"section": 3, "instruction": "fix B"},
+        {"section": 2, "instruction": "   "},
+    ]}
+    with patch.object(agent, "_call_claude_json", return_value=raw):
+        revision = agent.plan_revision(story="s", plan="p", feedbacks=["f"])["revision"]
+    assert revision["section_revisions"] == [
+        {"section": 3, "instruction": "fix A; fix B"},
+        {"section": 1, "instruction": "cut the dream"},
+    ]
+    assert revision["general_notes"] == ""
+
+
+def test_structural_operations_pass_through():
+    agent = PlanningAgent()
+    raw = dict(_EMPTY, structural_operations=[{"op": "MOVE", "section": 4, "target": 1}])
+    with patch.object(agent, "_call_claude_json", return_value=raw):
+        revision = agent.plan_revision(story="s", plan="p", feedbacks=["f"])["revision"]
+    assert revision["structural_operations"] == [{"op": "MOVE", "section": 4, "target": 1}]
+
+
+def test_revision_prompt_describes_fields_not_a_line_format():
+    assert "===" not in REVISION_PLAN_SYSTEM_PROMPT
+    assert "single line" not in REVISION_PLAN_SYSTEM_PROMPT
+    for field in ("structural_operations", "section_revisions", "general_notes"):
+        assert field in REVISION_PLAN_SYSTEM_PROMPT
