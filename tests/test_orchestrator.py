@@ -468,3 +468,29 @@ def test_the_rebudget_runs_after_the_bible_revision():
     # The original plan added up; the bible revision broke it, and that is what got caught.
     council.planner.fix_plan_length.assert_called_once()
     assert council.planner.fix_plan_length.call_args.kwargs["check"]["declared"] == 1000
+
+
+def test_middle_plan_revision_is_canon_aware_whenever_a_canon_exists():
+    """The middle reviewers tag findings [CRAFT]/[WORLD] under a canon sheet, so the
+    plan_revision that synthesizes them needs the bucket clause too — not just the
+    checker-driven one after it."""
+    for world_class, expected in ((wc.SECONDARY, True), (wc.NON_EARTH, True),
+                                  (wc.EARTH, False)):
+        council = WritingCouncil()
+        council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+        council.writer.revise = MagicMock(return_value={
+            "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nS.",
+            "revised_sections": None})
+        for name in ("consistency", "ai_checker", "engine", "strangeness", "sensory"):
+            setattr(getattr(council, name), "run",
+                    MagicMock(return_value={"output": name, "agent": name}))
+
+        council._run_inner(
+            plan="plan", story="<<<SECTION 1>>>\nS.", middle_feedbacks=["m1", "m2"],
+            label="middle.inner", world_class=world_class,
+            canon_sheet="CANON" if expected else "")
+
+        first, second = council.planner.plan_revision.call_args_list
+        assert first.kwargs["feedbacks"] == ["m1", "m2"]
+        assert first.kwargs["canon_aware"] is expected, world_class
+        assert second.kwargs["canon_aware"] is expected, world_class
