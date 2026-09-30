@@ -19,9 +19,16 @@ SYNOPSIS: A doomed empire's last offensive breaks on an accident of timing.
 """
 
 
+def _fields(brief):
+    from agents.intake_agent import BRIEF_FIELDS
+    parsed = dict(l.split(': ', 1) for l in brief.splitlines()[1:] if ': ' in l)
+    return {name: parsed.get(name, '') for name in BRIEF_FIELDS}
+
+
 def _mock_council():
     council = WritingCouncil()
-    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF})
+    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF,
+                                                  "fields": _fields(_BRIEF)})
     council.planner.run = MagicMock(return_value={"agent": "PlanningAgent", "output": "plan"})
     council.writer.run = MagicMock(
         return_value={"agent": "WriterAgent", "output": "story", "revised_sections": None})
@@ -42,9 +49,8 @@ def _mock_council():
 
 def test_merge_prefers_a_non_empty_user_value():
     council = WritingCouncil()
-    from agents.intake_agent import parse_brief
     merged = council._merge_brief(
-        parse_brief(_BRIEF), idea="my own idea", world_rules="", framework="",
+        _fields(_BRIEF), idea="my own idea", world_rules="", framework="",
         target_length="3,000 words", title="", filename_stem="upload")
     assert merged["idea"] == "my own idea"
     assert merged["target_length"] == "3,000 words"
@@ -52,9 +58,8 @@ def test_merge_prefers_a_non_empty_user_value():
 
 def test_merge_falls_back_to_the_brief_when_a_field_is_blank():
     council = WritingCouncil()
-    from agents.intake_agent import parse_brief
     merged = council._merge_brief(
-        parse_brief(_BRIEF), idea="", world_rules="", framework="",
+        _fields(_BRIEF), idea="", world_rules="", framework="",
         target_length="", title="", filename_stem="upload")
     assert merged["idea"].startswith("A doomed empire")
     assert merged["target_length"] == "8432 words"
@@ -65,8 +70,7 @@ def test_merge_falls_back_to_the_brief_when_a_field_is_blank():
 
 def test_merge_uses_the_filename_stem_when_the_brief_has_no_title():
     council = WritingCouncil()
-    from agents.intake_agent import parse_brief
-    fields = parse_brief(_BRIEF)
+    fields = _fields(_BRIEF)
     fields["TITLE"] = ""
     merged = council._merge_brief(fields, idea="", world_rules="", framework="",
                                   target_length="", title="", filename_stem="my_upload")
@@ -184,8 +188,7 @@ def test_writer_budget_scales_with_a_long_target():
 # --- Rewrite titles advance their version marker ---
 
 def _merge_title(council, *, user_title="", brief_title="The Sforzato", stem="upload"):
-    from agents.intake_agent import parse_brief
-    fields = parse_brief(_BRIEF)
+    fields = _fields(_BRIEF)
     fields["TITLE"] = brief_title
     return council._merge_brief(
         fields, idea="", world_rules="", framework="", target_length="",

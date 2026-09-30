@@ -19,7 +19,7 @@ from agents import (
     EngineReviewerAgent,
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL, max_tokens_for
-from agents.intake_agent import IntakeAgent, parse_brief
+from agents.intake_agent import IntakeAgent
 from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
@@ -205,7 +205,7 @@ class WritingCouncil:
             brief_text = intake_result["output"]
 
             merged = self._merge_brief(
-                parse_brief(brief_text), idea=idea, world_rules=world_rules,
+                intake_result["fields"], idea=idea, world_rules=world_rules,
                 framework=framework, target_length=target_length, title=title,
                 filename_stem=Path(source_filename).stem if source_filename else "")
             idea = merged["idea"]

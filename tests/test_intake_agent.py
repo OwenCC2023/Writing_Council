@@ -1,77 +1,71 @@
 from unittest.mock import patch
 
-from agents.intake_agent import IntakeAgent, parse_brief, BRIEF_FIELDS
+from agents.intake_agent import (
+    BRIEF_FIELDS, BRIEF_SCHEMA, SYSTEM_PROMPT, IntakeAgent, brief_fields, render_brief)
 
-_BRIEF = """\
-=== STORY BRIEF ===
-TITLE: The Sforzato
-WORLD_CLASS_GUESS: NON-EARTH — interstellar war, invented FTL physics
-GENRE: military space opera
-SETTING: a fallen empire's frontier systems
-WORLD RULES: hyperlanes connect only certain systems; FTL comms need relay ships
-CHARACTERS: Admiral Ligatto — wants vindication, fears irrelevance, drives the counteroffensive
-PLOT: Ligatto launches the counteroffensive
-  Republican forces fall back
-  Frankfurt im Weltraum breaks the momentum
-STORYLINE/STRUCTURE: third limited, past tense, chronological
-INTENT: make the reader feel the cost of a turning point nobody chose
-LENGTH: 8432 words
-SYNOPSIS: A doomed empire's last offensive breaks on an accident of timing.
-"""
+_RAW = {
+    "title": "The Sforzato",
+    "world_class_guess": "NON-EARTH",
+    "world_class_reason": "interstellar war, invented FTL physics",
+    "genre": "military space opera",
+    "setting": "a fallen empire's frontier systems",
+    "world_rules": "hyperlanes connect only certain systems; FTL comms need relay ships",
+    "characters": ["Admiral Ligatto — wants vindication, fears irrelevance, drives the "
+                   "counteroffensive"],
+    "plot": ["Ligatto launches the counteroffensive", "Republican forces fall back",
+             "  ", "Frankfurt im Weltraum breaks the momentum"],
+    "structure": "third limited, past tense, chronological",
+    "intent": "make the reader feel the cost of a turning point nobody chose",
+    "length": "8432 words",
+    "synopsis": "A doomed empire's last offensive breaks on an accident of timing.",
+}
 
 
-def test_parse_brief_extracts_every_field():
-    fields = parse_brief(_BRIEF)
+def test_brief_fields_maps_every_schema_key_to_its_brief_field():
+    fields = brief_fields(_RAW)
+    assert list(fields) == BRIEF_FIELDS
     assert fields["TITLE"] == "The Sforzato"
-    assert fields["GENRE"] == "military space opera"
-    assert fields["LENGTH"] == "8432 words"
-    assert fields["SYNOPSIS"].startswith("A doomed empire")
-
-
-def test_parse_brief_keeps_multiline_field_bodies():
-    fields = parse_brief(_BRIEF)
-    assert "Republican forces fall back" in fields["PLOT"]
-    assert "Frankfurt im Weltraum" in fields["PLOT"]
-    # The next header ends the field.
-    assert "STORYLINE" not in fields["PLOT"]
-
-
-def test_parse_brief_extracts_the_special_character_field_names():
-    """WORLD RULES has a space, STORYLINE/STRUCTURE a slash. Neither is a plain
-    identifier, so a pattern built on \\w+ or split on the first token would
-    quietly lose them (and their bodies would bleed into the field above)."""
-    fields = parse_brief(_BRIEF)
-    assert fields["WORLD RULES"] == (
-        "hyperlanes connect only certain systems; FTL comms need relay ships")
+    assert fields["WORLD RULES"].startswith("hyperlanes")
     assert fields["STORYLINE/STRUCTURE"] == "third limited, past tense, chronological"
-    # Bodies stayed in their own field rather than bleeding into the previous one.
-    assert "hyperlanes" not in fields["SETTING"]
-    assert "third limited" not in fields["PLOT"]
+    assert fields["LENGTH"] == "8432 words"
+    assert fields["WORLD_CLASS_GUESS"] == "NON-EARTH — interstellar war, invented FTL physics"
 
 
-def test_parse_brief_missing_field_becomes_empty_string():
-    fields = parse_brief("=== STORY BRIEF ===\nTITLE: Only This\n")
-    assert fields["TITLE"] == "Only This"
-    assert fields["PLOT"] == ""
-    assert set(fields) == set(BRIEF_FIELDS)
+def test_list_fields_become_one_line_per_entry_with_blanks_dropped():
+    fields = brief_fields(_RAW)
+    assert fields["PLOT"] == ("Ligatto launches the counteroffensive\n"
+                              "Republican forces fall back\n"
+                              "Frankfurt im Weltraum breaks the momentum")
 
 
-def test_parse_brief_warns_about_missing_fields(capsys):
-    """A malformed brief must not degrade to blanks invisibly."""
-    parse_brief("=== STORY BRIEF ===\nTITLE: Only This\n")
-    out = capsys.readouterr().out
-    assert "WARNING" in out
-    assert "LENGTH" in out
+def test_an_untitled_story_keeps_an_empty_title():
+    fields = brief_fields(dict(_RAW, title=""))
+    assert fields["TITLE"] == ""
 
 
-def test_parse_brief_is_silent_on_a_complete_brief(capsys):
-    parse_brief(_BRIEF)
-    assert "WARNING" not in capsys.readouterr().out
+def test_render_brief_keeps_the_block_the_planner_and_ui_read():
+    text = render_brief(brief_fields(_RAW))
+    lines = text.splitlines()
+    assert lines[0] == "=== STORY BRIEF ==="
+    assert lines[1] == "TITLE: The Sforzato"
+    assert "SYNOPSIS: A doomed empire" in text
+    # Field order is the brief's historical order.
+    assert [l.split(":")[0] for l in lines if l.split(":")[0] in BRIEF_FIELDS] == BRIEF_FIELDS
+
+
+def test_run_returns_fields_and_the_rendered_brief():
+    agent = IntakeAgent()
+    with patch.object(agent, "_call_claude_json", return_value=_RAW) as m:
+        result = agent.run(story="x")
+    assert m.call_args.args[2] is BRIEF_SCHEMA
+    assert result["agent"] == "IntakeAgent"
+    assert result["fields"] == brief_fields(_RAW)
+    assert result["output"] == render_brief(result["fields"])
 
 
 def test_run_injects_computed_word_count_not_a_guess():
     agent = IntakeAgent()
-    with patch.object(agent, "_call_claude", return_value=_BRIEF) as m:
+    with patch.object(agent, "_call_claude_json", return_value=_RAW) as m:
         agent.run(story="the prose", source_words=8432)
     user_prompt = m.call_args.args[1]
     assert "8432" in user_prompt
@@ -80,28 +74,23 @@ def test_run_injects_computed_word_count_not_a_guess():
 
 def test_run_threads_rewrite_notes_into_the_prompt():
     agent = IntakeAgent()
-    with patch.object(agent, "_call_claude", return_value=_BRIEF) as m:
+    with patch.object(agent, "_call_claude_json", return_value=_RAW) as m:
         agent.run(story="the prose", rewrite_notes="cut it to 3,000 words")
     assert "cut it to 3,000 words" in m.call_args.args[1]
 
 
 def test_system_prompt_orders_front_matter_ignored():
-    agent = IntakeAgent()
-    with patch.object(agent, "_call_claude", return_value=_BRIEF) as m:
-        agent.run(story="the prose")
-    system_prompt = m.call_args.args[0]
-    assert "front matter" in system_prompt
-    assert "STORY BRIEF" in system_prompt
-
-
-def test_run_returns_expected_shape():
-    agent = IntakeAgent()
-    with patch.object(agent, "_call_claude", return_value=_BRIEF):
-        assert agent.run(story="x") == {"agent": "IntakeAgent", "output": _BRIEF}
+    assert "front matter" in SYSTEM_PROMPT
 
 
 def test_world_class_guess_offers_all_three_tiers():
-    from agents.intake_agent import SYSTEM_PROMPT
-    guess_line = next(l for l in SYSTEM_PROMPT.splitlines()
-                      if l.startswith("WORLD_CLASS_GUESS:"))
-    assert "EARTH, SECONDARY, or NON-EARTH" in guess_line
+    assert BRIEF_SCHEMA["properties"]["world_class_guess"]["enum"] == [
+        "EARTH", "SECONDARY", "NON-EARTH"]
+    guess = next(l for l in SYSTEM_PROMPT.splitlines()
+                 if l.startswith("- world_class_guess:"))
+    assert "EARTH, SECONDARY, or NON-EARTH" in guess
+
+
+def test_prompt_no_longer_polices_a_line_format():
+    assert "Emit EXACTLY" not in SYSTEM_PROMPT
+    assert "beginning of a line" not in SYSTEM_PROMPT

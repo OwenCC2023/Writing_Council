@@ -22,9 +22,16 @@ _STORY = ("The fleet dropped out of the lane.\n\n"
           "At Frankfurt the timing failed him.")
 
 
+def _fields(brief):
+    from agents.intake_agent import BRIEF_FIELDS
+    parsed = dict(l.split(': ', 1) for l in brief.splitlines()[1:] if ': ' in l)
+    return {name: parsed.get(name, '') for name in BRIEF_FIELDS}
+
+
 def _revise_council(plan_output="<<<WORLD_CLASS: EARTH>>>\nplan text"):
     council = WritingCouncil()
-    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF})
+    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF,
+                                                  "fields": _fields(_BRIEF)})
     council.planner.run = MagicMock(
         return_value={"agent": "PlanningAgent", "output": plan_output})
     council.planner.revise_with_world_bible = MagicMock(

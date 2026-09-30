@@ -20,9 +20,16 @@ _STORY = ("The fleet dropped out of the lane.\n\n"
 _BRIEF = "=== STORY BRIEF ===\nTITLE: T\nLENGTH: 900 words\nSYNOPSIS: S\n"
 
 
+def _fields(brief):
+    from agents.intake_agent import BRIEF_FIELDS
+    parsed = dict(l.split(': ', 1) for l in brief.splitlines()[1:] if ': ' in l)
+    return {name: parsed.get(name, '') for name in BRIEF_FIELDS}
+
+
 def _council():
     council = WritingCouncil()
-    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF})
+    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF,
+                                                  "fields": _fields(_BRIEF)})
     council.planner.run = MagicMock(
         return_value={"agent": "PlanningAgent", "output": "<<<WORLD_CLASS: EARTH>>>\nplan"})
     council.sectionizer.run = MagicMock(
