@@ -25,13 +25,20 @@ that section begins, copied EXACTLY from the draft — same words, same punctuat
 capitalisation.
 
 Rules:
-- One anchor per line. Nothing else: no numbering, no quotes, no commentary.
-- Emit exactly as many anchors as the plan has sections, in story order.
+- Return exactly as many anchors as the plan has sections, in story order.
 - Every anchor must appear in the draft word for word, and must be unique in it. If an \
 opening phrase repeats elsewhere in the draft, extend the anchor until it is unique.
 - The first anchor marks where the narrative itself begins. Skip any manuscript front \
 matter — byline, contact block, word count, title page.\
 """
+
+
+ANCHORS_SCHEMA = {
+    "type": "object",
+    "properties": {"anchors": {"type": "array", "items": {"type": "string"}}},
+    "required": ["anchors"],
+    "additionalProperties": False,
+}
 
 
 def insert_markers(story: str, anchors: list, reason: list = None) -> str:
@@ -154,7 +161,7 @@ class SectionizerAgent(BaseAgent):
         user_prompt = (
             f"NARRATIVE PLAN:\n{plan}\n\n"
             f"DRAFT:\n{story}\n\n"
-            f"Return exactly {section_count} anchors, one per line."
+            f"Return exactly {section_count} anchors."
         )
-        output = self._call_claude(SYSTEM_PROMPT, user_prompt)
-        return [line.strip() for line in output.splitlines() if line.strip()]
+        raw = self._call_claude_json(SYSTEM_PROMPT, user_prompt, ANCHORS_SCHEMA)
+        return [a.strip() for a in raw["anchors"] if a.strip()]
