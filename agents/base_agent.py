@@ -1,4 +1,5 @@
 import base64
+import json
 import os
 import re
 from pathlib import Path
@@ -62,20 +63,34 @@ class RefusalError(RuntimeError):
     """The model (and any fallback) declined the request."""
 
 
-def _request_params(model: str, max_tokens: int, effort: str = None) -> dict:
-    """Model-specific thinking / effort / fallback settings for one call.
+class StructuredOutputError(RuntimeError):
+    """A JSON-schema call came back truncated or unparseable.
+
+    Raised instead of returning a partial dict: a revision plan cut off mid-list
+    would silently drop the instructions after the cut.
+    """
+
+
+def _request_params(model: str, max_tokens: int, effort: str = None,
+                    schema: dict = None) -> dict:
+    """Model-specific thinking / effort / fallback / output-format settings for one call.
 
     `effort` overrides the model's default level, and is ignored on a model with
     no `_EFFORT_BY_MODEL` entry — those run thinking-disabled, where an effort
-    field is at best meaningless (Haiku 4.5 rejects it).
+    field is at best meaningless (Haiku 4.5 rejects it). `schema`, when given,
+    constrains the response to that JSON schema via `output_config.format`, which
+    every model here supports and which shares `output_config` with effort.
     """
+    output_format = {"format": {"type": "json_schema", "schema": schema}} if schema else {}
     default = _EFFORT_BY_MODEL.get(model)
     if default is None:
-        return {"max_tokens": max_tokens, "thinking": _THINKING_DISABLED}
-    effort = effort or default
+        params = {"max_tokens": max_tokens, "thinking": _THINKING_DISABLED}
+        if output_format:
+            params["output_config"] = output_format
+        return params
     return {
         "max_tokens": max_tokens + THINKING_HEADROOM,
-        "output_config": {"effort": effort},
+        "output_config": {"effort": effort or default, **output_format},
         "betas": [_FALLBACK_BETA],
         "extra_body": {"fallbacks": "default"},
     }
@@ -113,19 +128,23 @@ class BaseAgent:
                 return block.text
         return response.content[0].text
 
-    def _send(self, model: str, max_tokens: int, system_prompt: str, content,
-              effort: str = None) -> str:
-        """Stream one request and return its text. Streaming because the SDK
-        refuses a non-streaming call whose max_tokens could run past ten
+    def _stream(self, model: str, max_tokens: int, system_prompt: str, content,
+                effort: str = None, schema: dict = None):
+        """Stream one request and return the final message. Streaming because the
+        SDK refuses a non-streaming call whose max_tokens could run past ten
         minutes (~21k tokens), which thinking headroom on a long write crosses."""
         with self.client.beta.messages.stream(
             model=model,
             system=system_prompt,
             messages=[{"role": "user", "content": content}],
-            **_request_params(model, max_tokens, effort),
+            **_request_params(model, max_tokens, effort, schema),
         ) as stream:
-            response = stream.get_final_message()
-        return self._first_text(response)
+            return stream.get_final_message()
+
+    def _send(self, model: str, max_tokens: int, system_prompt: str, content,
+              effort: str = None) -> str:
+        return self._first_text(
+            self._stream(model, max_tokens, system_prompt, content, effort))
 
     def _call_claude(
         self,
@@ -138,6 +157,34 @@ class BaseAgent:
         """Send a prompt to Claude and return the text response."""
         return self._send(model or self.model, max_tokens, system_prompt, user_prompt,
                           effort=effort)
+
+    def _call_claude_json(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: dict,
+        model: str = None,
+        max_tokens: int = 8192,
+        effort: str = None,
+    ) -> dict:
+        """Send a prompt whose response is constrained to `schema`; return the parsed dict.
+
+        A refusal raises RefusalError (via `_first_text`, before any parse). A response
+        cut off at max_tokens or otherwise unparseable raises StructuredOutputError.
+        """
+        response = self._stream(model or self.model, max_tokens, system_prompt,
+                                user_prompt, effort, schema)
+        text = self._first_text(response)
+        if getattr(response, "stop_reason", None) == "max_tokens":
+            raise StructuredOutputError(
+                f"{type(self).__name__}: structured response hit max_tokens "
+                f"({max_tokens}) and is incomplete; raise the budget")
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise StructuredOutputError(
+                f"{type(self).__name__}: structured response was not valid JSON: {exc}"
+            ) from exc
 
     def _call_claude_with_image(
         self,
