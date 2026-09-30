@@ -523,6 +523,7 @@ class WritingCouncil:
                 story=story,
                 plan=plan,
                 feedbacks=middle_feedbacks,
+                canon_aware=wc.wants_canon(world_class),
             )
             self._log_end(result, step=f"{label}.plan_revision_1")
             pre_write_plan = result["output"]
