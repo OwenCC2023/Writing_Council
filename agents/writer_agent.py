@@ -196,7 +196,7 @@ class WriterAgent(BaseAgent):
                                    max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS)
         return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
-    def revise(self, plan: str, story: str, feedback: str, model: str = None,
+    def revise(self, plan: str, story: str, revision: dict, model: str = None,
                canon_sheet: str = "", world_bible: str = "", constraint: str = "",
                max_tokens: int = None, target_length: str = "") -> dict:
         world = (_world_block(canon_sheet, world_bible) + _constraint_block(constraint)
@@ -207,13 +207,17 @@ class WriterAgent(BaseAgent):
         if not sections:
             output = self._call_claude(
                 REVISION_FALLBACK_SYSTEM_PROMPT + world,
-                self._build_fallback_prompt(plan, story, feedback),
+                self._build_fallback_prompt(plan, story, self._render_notes(revision)),
                 model=model,
                 max_tokens=max_tokens or INITIAL_WRITE_MAX_TOKENS,
             )
             return {"agent": "WriterAgent", "output": output, "revised_sections": None}
 
-        structural_ops, section_revisions, general_notes = self._parse_revision_plan(feedback)
+        structural_ops = [{'op': op['op'], 'args': (op['section'], op['target'])}
+                          for op in revision.get('structural_operations', [])]
+        section_revisions = {r['section']: r['instruction']
+                             for r in revision.get('section_revisions', [])}
+        general_notes = revision.get('general_notes') or None
 
         # Apply structural ops (move/merge) in Python — no LLM call needed.
         if structural_ops:
@@ -385,70 +389,18 @@ class WriterAgent(BaseAgent):
         return sections
 
     # ------------------------------------------------------------------
-    # Revision plan parsing
+    # Revision plan rendering
     # ------------------------------------------------------------------
 
-    def _parse_revision_plan(self, revision_plan: str) -> tuple:
-        """Parse a planner's structured revision plan into its three components.
-
-        Returns:
-            structural_ops:    list of {'op': str, 'args': (int, int)}
-            section_revisions: dict[int, str]
-            general_notes:     str | None
-
-        Fallback: if no === headers are found, returns ([], {}, revision_plan)
-        so the caller uses the full string as general notes (full-story rewrite path).
-        """
-        header_pattern = re.compile(r'===\s*(.*?)\s*===', re.IGNORECASE)
-        if not header_pattern.search(revision_plan):
-            # No structured format — treat the whole string as general notes.
-            return [], {}, revision_plan
-
-        parts = header_pattern.split(revision_plan)
-        # parts: [pre, header1, body1, header2, body2, ...]
-        blocks = {}
-        i = 1
-        while i < len(parts) - 1:
-            header = parts[i].strip().upper()
-            body = parts[i + 1].strip()
-            blocks[header] = body
-            i += 2
-
-        structural_ops = self._parse_structural_ops(
-            blocks.get("STRUCTURAL OPERATIONS", "")
-        )
-        section_revisions = self._parse_section_revisions(
-            blocks.get("SECTION REVISIONS", "")
-        )
-        raw_notes = blocks.get("GENERAL NOTES", "").strip()
-        general_notes = None if (not raw_notes or raw_notes.upper() == "NONE") else raw_notes
-
-        return structural_ops, section_revisions, general_notes
-
-    def _parse_structural_ops(self, block: str) -> list:
-        ops = []
-        for line in block.splitlines():
-            line = line.strip()
-            if not line or line.upper() == "NONE":
-                continue
-            move_m = re.match(r'MOVE\s+(\d+)\s+AFTER\s+(\d+)', line, re.IGNORECASE)
-            if move_m:
-                ops.append({'op': 'MOVE', 'args': (int(move_m.group(1)),
-                                                    int(move_m.group(2)))})
-                continue
-            merge_m = re.match(r'MERGE\s+(\d+)\s+(\d+)', line, re.IGNORECASE)
-            if merge_m:
-                ops.append({'op': 'MERGE', 'args': (int(merge_m.group(1)),
-                                                     int(merge_m.group(2)))})
-        return ops
-
-    def _parse_section_revisions(self, block: str) -> dict:
-        revisions = {}
-        for line in block.splitlines():
-            m = re.match(r'SECTION\s+(\d+)\s*:\s*(.+)', line.strip(), re.IGNORECASE)
-            if m:
-                revisions[int(m.group(1))] = m.group(2).strip()
-        return revisions
+    @staticmethod
+    def _render_notes(revision: dict) -> str:
+        """Flatten a revision plan into notes for the full-rewrite path, which has no
+        sections to target (the draft carries no markers)."""
+        lines = [f"Section {r['section']}: {r['instruction']}"
+                 for r in revision.get('section_revisions', [])]
+        if revision.get('general_notes'):
+            lines.append(revision['general_notes'])
+        return "\n".join(lines)
 
     # ------------------------------------------------------------------
     # Prompt assembly

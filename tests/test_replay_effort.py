@@ -80,3 +80,17 @@ def test_dry_run_makes_no_calls(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(r, "_make_agents", lambda: (_ for _ in ()).throw(AssertionError))
     r.main([str(log)])
     assert "Dry run" in capsys.readouterr().out
+
+
+def test_replay_forces_effort_on_structured_calls_too():
+    """The planner's revision calls go through _call_claude_json; forcing effort only
+    on _call_claude would silently replay them at the default."""
+    from unittest.mock import patch
+    from agents.planning_agent import PlanningAgent
+    agent = PlanningAgent()
+    job = {"call": ("planner", "plan_revision", dict(story="s", plan="p", feedbacks=["f"]))}
+    raw = {"structural_operations": [], "section_revisions": [], "general_notes": ""}
+    with patch.object(PlanningAgent, "_call_claude_json", return_value=raw) as m:
+        r.replay(job, {"planner": agent}, "medium")
+    assert m.call_args.kwargs["effort"] == "medium"
+    assert "_call_claude_json" not in agent.__dict__  # the instance wrapper is removed

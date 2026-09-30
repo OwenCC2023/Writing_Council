@@ -11,7 +11,7 @@ from .strangeness_agent import StrangenessReviewerAgent
 from .sensory_agent import SensoryQuotaAgent
 from .engine_agent import EngineReviewerAgent
 from .variance_agent import VarianceReviewerAgent
-from .intake_agent import IntakeAgent, parse_brief, BRIEF_FIELDS
+from .intake_agent import IntakeAgent, BRIEF_FIELDS, brief_fields, render_brief
 from .sectionizer_agent import SectionizerAgent, sectionize
 
 __all__ = [
@@ -29,7 +29,8 @@ __all__ = [
     "EngineReviewerAgent",
     "VarianceReviewerAgent",
     "IntakeAgent",
-    "parse_brief",
+    "brief_fields",
+    "render_brief",
     "BRIEF_FIELDS",
     "SectionizerAgent",
     "sectionize",

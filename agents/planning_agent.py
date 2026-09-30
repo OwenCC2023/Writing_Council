@@ -1,3 +1,4 @@
+import json
 import re
 
 from .base_agent import BaseAgent, INITIAL_DRAFT_MODEL
@@ -174,31 +175,21 @@ REVISION_PLAN_SYSTEM_PROMPT = """\
 You are a story architect synthesizing feedback from multiple reviewers into a \
 structured revision plan for a writer.
 
-The current draft uses section markers of the form <<<SECTION N>>>. All revision \
-instructions must reference sections by their current marker number as it appears \
-in the draft.
+The current draft uses section markers of the form <<<SECTION N>>>. Every section \
+number in your plan refers to a section by its current marker number as it appears in \
+the draft.
 
-Your output MUST follow this exact format — no text outside these three blocks:
-
-=== STRUCTURAL OPERATIONS ===
-One per line. Valid forms only:
-  MOVE N AFTER M   — moves section N to immediately after section M
-  MERGE N M        — merges section N with the immediately following section (M must equal N+1)
-Write NONE if no structural changes are needed.
-
-=== SECTION REVISIONS ===
-One per line:
-  SECTION N: [specific instruction for what to change and why]
-Only include sections that need content changes.
-Each instruction must fit on a single line — instructions spanning multiple lines are \
-discarded by the parser. Pack the full instruction into one line; use semicolons to \
-separate multiple changes to the same section.
-
-=== GENERAL NOTES ===
-Feedback that cannot map to a specific section (overall tone, pacing, voice).
-Write NONE if nothing applies. Use this block sparingly: anything written here triggers \
-a full-story rewrite pass, which risks degrading sections that are already working. If \
-feedback can be mapped to specific sections, map it.
+The plan has three parts:
+- structural_operations: moves and merges, applied before any content revision. A MOVE \
+  places `section` immediately after `target`. A MERGE joins `section` with the section \
+  that follows it, so `target` is always `section` + 1. Leave the list empty when no \
+  structural change is needed.
+- section_revisions: one entry for each section that needs a content change, carrying \
+  the instruction for what to change and why. Only include sections that need changes.
+- general_notes: feedback that cannot map to a specific section (overall tone, pacing, \
+  voice), or an empty string. Use it sparingly: anything written here triggers a \
+  full-story rewrite pass, which risks degrading sections that are already working. If \
+  feedback can be mapped to specific sections, map it.
 
 Rules:
 - Resolve conflicts between reviewers; favour narrative integrity and the original vision. \
@@ -210,9 +201,9 @@ Rules:
 - When feedback names a stylistic failure (an overused construction, an explained \
   metaphor, a labeled emotion), the instruction is almost always to CUT, not to rework. \
   Say "cut the final two sentences" rather than "tighten the ending".
-- Do not combine a MOVE or MERGE with SECTION revisions in the same plan: structural \
-  operations renumber the sections before content revisions are applied, so your section \
-  numbers would point at the wrong prose. If both are needed, issue only the structural \
+- Do not combine structural operations with section revisions in the same plan: \
+  structural operations renumber the sections before content revisions are applied, so \
+  your section numbers would point at the wrong prose. If both are needed, issue only the structural \
   operations this pass; content problems will surface again next round.
 - Only include sections that genuinely need revision — prioritise the changes with the \
   highest impact and omit marginal ones. If a section is working, do not mention it. A \
@@ -222,39 +213,25 @@ Rules:
 
 PROSE_REVISION_PLAN_SYSTEM_PROMPT = """\
 You are a story architect converting a prose editor's findings into a structured \
-revision plan for a writer. This is a final line-level polish pass.
+revision plan for a writer. This is a final line-level polish pass: every fix maps to a \
+numbered section, and nothing is moved or merged.
 
-The draft uses <<<SECTION N>>> markers. All instructions reference sections by their \
-current marker number as it appears in the draft.
+The draft uses <<<SECTION N>>> markers. Every section number in your plan refers to a \
+section by its current marker number as it appears in the draft.
 
-Your output MUST follow this exact format — no text outside these three blocks:
-
-=== STRUCTURAL OPERATIONS ===
-NONE
-
-=== SECTION REVISIONS ===
-One per line:
-  SECTION N: [specific instruction for what to change and why]
-
-=== GENERAL NOTES ===
-NONE
+The plan is a list of section_revisions, each carrying a section number and the \
+instruction for that section. One entry can carry every fix that falls in its section.
 
 HARD RULES FOR THIS PASS:
-- STRUCTURAL OPERATIONS is always NONE. Do not move or merge sections this pass.
-- GENERAL NOTES is always NONE. Every fix maps to a numbered section.
-- FORCE ALL FIXES: every prose violation in the PROSE FINDINGS list MUST appear as a \
-  SECTION revision. Do not omit, downrank, or second-guess any of them — the list is a \
+- FORCE ALL FIXES: every prose violation in the PROSE FINDINGS list MUST appear in a \
+  section revision. Do not omit, downrank, or second-guess any of them — the list is a \
   fix list, not a candidate pool.
-- ONE LINE PER SECTION: if multiple violations fall in the same section, combine them \
-  into a SINGLE `SECTION N:` line, separating the individual fixes with semicolons. \
-  NEVER write two lines for the same section — the second silently overwrites the first, \
-  dropping a required fix.
 - Be concrete and self-contained: the writer sees ONLY that section's text and your \
   instruction, not the findings or the rest of the draft. Quote the exact phrase to cut \
   or change and state the replacement or the effect it must achieve. Prefer CUT over \
   rework for stylistic tics.
 - CONSISTENCY notes: fold any consistency finding that is a text-level continuity fix \
-  (a name, a date, a timeline detail) into the relevant SECTION line as an added clause. \
+  (a name, a date, a timeline detail) into the relevant section's instruction. \
   Drop any consistency finding that would require moving or merging sections — structure \
   is out of scope this pass.\
 """
@@ -273,6 +250,86 @@ finding as instructed above. DROP any [WORLD]-tagged "reads strange" finding eve
 this pass otherwise forces all findings — the world's strangeness is intentional. Still \
 fold in [WORLD] findings that are genuine text-level contradictions.\
 """
+
+_SECTION_REVISIONS = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "section": {"type": "integer"},
+            "instruction": {"type": "string"},
+        },
+        "required": ["section", "instruction"],
+        "additionalProperties": False,
+    },
+}
+
+REVISION_PLAN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "structural_operations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "op": {"type": "string", "enum": ["MOVE", "MERGE"]},
+                    "section": {"type": "integer"},
+                    "target": {"type": "integer"},
+                },
+                "required": ["op", "section", "target"],
+                "additionalProperties": False,
+            },
+        },
+        "section_revisions": _SECTION_REVISIONS,
+        "general_notes": {"type": "string"},
+    },
+    "required": ["structural_operations", "section_revisions", "general_notes"],
+    "additionalProperties": False,
+}
+
+# The prose pass never moves, merges, or rewrites the whole story, so its schema has
+# nowhere to put those — the rule is enforced by the shape, not by the prompt.
+PROSE_REVISION_SCHEMA = {
+    "type": "object",
+    "properties": {"section_revisions": _SECTION_REVISIONS},
+    "required": ["section_revisions"],
+    "additionalProperties": False,
+}
+
+
+def _normalize_revision(raw: dict) -> dict:
+    """Return the revision plan the writer consumes, from a schema-valid response.
+
+    Several entries for one section are merged in order, joined with "; " — the model
+    may split a section's fixes, and the writer applies one instruction per section, so
+    keeping only the last would drop a required fix. Whitespace inside an instruction is
+    collapsed, empty instructions dropped, and a general note of "NONE" read as empty.
+    """
+    merged = {}
+    for entry in raw.get("section_revisions", []):
+        instruction = " ".join(entry["instruction"].split())
+        if not instruction:
+            continue
+        section = entry["section"]
+        merged[section] = f"{merged[section]}; {instruction}" if section in merged else instruction
+    notes = " ".join(raw.get("general_notes", "").split())
+    return {
+        "structural_operations": [
+            {"op": op["op"], "section": op["section"], "target": op["target"]}
+            for op in raw.get("structural_operations", [])
+        ],
+        "section_revisions": [
+            {"section": n, "instruction": text} for n, text in merged.items()
+        ],
+        "general_notes": "" if notes.upper() == "NONE" else notes,
+    }
+
+
+def _revision_result(raw: dict) -> dict:
+    revision = _normalize_revision(raw)
+    return {"agent": "PlanningAgent", "revision": revision,
+            "output": json.dumps(revision, indent=2, ensure_ascii=False)}
+
 
 BIBLE_REVISION_SYSTEM_PROMPT = """\
 You are a story architect revising a narrative plan now that the story's world has been \
@@ -389,7 +446,9 @@ class PlanningAgent(BaseAgent):
                 canon sheet exists — SECONDARY worlds as well as NON-EARTH ones.
 
         Returns:
-            A dict with 'agent' and 'output' keys; output is the three-block structured plan.
+            A dict with 'agent', 'revision' (the plan the writer consumes: structural
+            operations, section revisions, general notes) and 'output' (that plan as
+            indented JSON, for the log).
         """
         numbered = "\n\n".join(
             f"[Reviewer {i + 1}]\n{f}" for i, f in enumerate(feedbacks)
@@ -405,19 +464,20 @@ class PlanningAgent(BaseAgent):
             f"CURRENT DRAFT:\n{story}\n\n"
             f"{section_list}\n\n"
             f"FEEDBACK FROM MULTIPLE REVIEWERS:\n{numbered}\n\n"
-            "Produce a structured revision plan using the exact format specified."
+            "Produce the revision plan."
         )
         system_prompt = REVISION_PLAN_SYSTEM_PROMPT + (_REVISION_BUCKET_CLAUSE if canon_aware else "")
-        output = self._call_claude(system_prompt, user_prompt)
-        return {"agent": "PlanningAgent", "output": output}
+        raw = self._call_claude_json(system_prompt, user_prompt, REVISION_PLAN_SCHEMA)
+        return _revision_result(raw)
 
     def plan_revision_prose(self, story: str, plan: str,
                             prose_feedback: str, consistency_feedback: str,
                             canon_aware: bool = False, variance_feedback: str = "") -> dict:
         """Turn prose-editor findings into a forced-all section revision plan.
 
-        Every prose finding must become a SECTION revision; structural ops and
-        general notes are pinned to NONE. Used only by the final prose pass.
+        Every prose finding must become a section revision; the schema has no room
+        for structural operations or general notes, which come back empty. Used only
+        by the final prose pass. Returns the same shape as ``plan_revision``.
 
         Args:
             story: The current draft (may contain <<<SECTION N>>> markers).
@@ -450,11 +510,11 @@ class PlanningAgent(BaseAgent):
                 f"{variance_feedback}\n\n"
             )
         user_prompt += (
-            "Produce the structured revision plan using the exact format specified."
+            "Produce the revision plan."
         )
         system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if canon_aware else "")
-        output = self._call_claude(system_prompt, user_prompt)
-        return {"agent": "PlanningAgent", "output": output}
+        raw = self._call_claude_json(system_prompt, user_prompt, PROSE_REVISION_SCHEMA)
+        return _revision_result(raw)
 
     def fix_plan_length(self, plan: str, target_length: str, check: dict,
                         model: str = None) -> dict:

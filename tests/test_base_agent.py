@@ -149,6 +149,56 @@ def test_only_sensory_raises_effort_among_the_analysis_calls():
     ]
     for cls, invoke, expected in calls:
         agent = cls()
-        with patch.object(agent, "_call_claude", return_value="out") as m:
+        with patch.object(agent, "_call_claude", return_value="out") as m, \
+             patch.object(agent, "_call_claude_json", return_value={}) as mj:
             invoke(agent)
-        assert m.call_args.kwargs.get("effort") == expected, cls.__name__
+        called = m if m.called else mj
+        assert called.call_args.kwargs.get("effort") == expected, cls.__name__
+
+
+SCHEMA = {"type": "object", "properties": {"x": {"type": "string"}},
+          "required": ["x"], "additionalProperties": False}
+
+
+def test_schema_shares_output_config_with_effort_on_a_5_5_model():
+    agent, stream = _agent_returning(_response(_text('{"x": "a"}')))
+    assert agent._call_claude_json("sys", "user", SCHEMA) == {"x": "a"}
+    kwargs = stream.call_args.kwargs
+    assert kwargs["output_config"] == {
+        "effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}}
+    assert "thinking" not in kwargs
+
+
+def test_schema_on_haiku_sends_format_without_effort():
+    agent, stream = _agent_returning(_response(_text('{"x": "a"}')), model=FEEDBACK_MODEL)
+    agent._call_claude_json("sys", "user", SCHEMA)
+    kwargs = stream.call_args.kwargs
+    assert kwargs["output_config"] == {"format": {"type": "json_schema", "schema": SCHEMA}}
+    assert kwargs["thinking"] == {"type": "disabled"}
+
+
+def test_plain_calls_send_no_format():
+    agent, stream = _agent_returning(_response(_text("ok")))
+    agent._call_claude("sys", "user")
+    assert "format" not in stream.call_args.kwargs["output_config"]
+
+
+def test_truncated_structured_output_raises_instead_of_returning_a_partial_dict():
+    from agents.base_agent import StructuredOutputError
+    agent, _ = _agent_returning(_response(_text('{"x": "cut o'), stop_reason="max_tokens"))
+    with pytest.raises(StructuredOutputError, match="max_tokens"):
+        agent._call_claude_json("sys", "user", SCHEMA)
+
+
+def test_unparseable_structured_output_raises():
+    from agents.base_agent import StructuredOutputError
+    agent, _ = _agent_returning(_response(_text("not json")))
+    with pytest.raises(StructuredOutputError, match="not valid JSON"):
+        agent._call_claude_json("sys", "user", SCHEMA)
+
+
+def test_structured_refusal_raises_refusal_not_a_parse_error():
+    agent, _ = _agent_returning(_response(
+        stop_reason="refusal", stop_details=SimpleNamespace(category="cyber")))
+    with pytest.raises(RefusalError, match="cyber"):
+        agent._call_claude_json("sys", "user", SCHEMA)

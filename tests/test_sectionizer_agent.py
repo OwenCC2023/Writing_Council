@@ -144,12 +144,17 @@ def test_fallback_sectionize_keeps_front_matter_by_design():
     assert "Owen Cardwell-Copenhefer" in out
 
 
-def test_agent_run_returns_one_anchor_per_line():
+def test_agent_run_returns_the_anchor_array():
+    from agents.sectionizer_agent import ANCHORS_SCHEMA, SYSTEM_PROMPT
     agent = SectionizerAgent()
-    with patch.object(agent, "_call_claude",
-                      return_value="The fleet dropped out\n\nBy morning the line\n"):
+    with patch.object(agent, "_call_claude_json", return_value={
+            "anchors": [" The fleet dropped out ", "", "By morning the line"]}) as m:
         anchors = agent.run(plan="p", story=_STORY, section_count=2)
+    assert m.call_args.args[2] is ANCHORS_SCHEMA
     assert anchors == ["The fleet dropped out", "By morning the line"]
+    # The array replaces the one-per-line format, so its policing is gone.
+    assert "one per line" not in SYSTEM_PROMPT.lower()
+    assert "no numbering" not in SYSTEM_PROMPT
 
 
 def test_agent_uses_the_feedback_model():

@@ -15,7 +15,7 @@ def test_initial_inner_runs_plan_and_write_on_opus():
     council.consistency.run = MagicMock(return_value={"agent": "ConsistencyAgent", "output": "c"})
     council.ai_checker.run = MagicMock(return_value={"agent": "AIFailureCheckerAgent", "output": "a"})
     council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
-    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
+    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
 
@@ -45,7 +45,7 @@ def test_run_prose_pass_calls_agents_in_order():
     council.variance.run = MagicMock(
         return_value={"agent": "VarianceReviewerAgent", "output": "var"})
     council.planner.plan_revision_prose = MagicMock(
-        return_value={"agent": "PlanningAgent", "output": "revplan"})
+        return_value={"agent": "PlanningAgent", "output": "revplan", "revision": {"marker": "revplan"}})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
 
@@ -59,7 +59,7 @@ def test_run_prose_pass_calls_agents_in_order():
         story="story", plan="plan", prose_feedback="prose", consistency_feedback="cons",
         canon_aware=False, variance_feedback="var")
     council.writer.revise.assert_called_once_with(
-        plan="plan", story="story", feedback="revplan",
+        plan="plan", story="story", revision={"marker": "revplan"},
         model=None, canon_sheet="", world_bible="", constraint="",
         # No target_length here, so the budget resolves to the unchanged floor and the
         # writer's length block renders empty.
@@ -113,7 +113,7 @@ def test_initial_inner_non_earth_builds_world_and_uses_opus_writer():
     council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
     council.strangeness.run = MagicMock(return_value={"output": "st", "agent": "S"})
     council.sensory.run = MagicMock(return_value={"output": "se", "agent": "Se"})
-    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nFinal.",
         "revised_sections": None})
@@ -149,7 +149,7 @@ def test_initial_inner_earth_skips_world_builder():
     council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
     council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
     council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
-    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
 
@@ -197,7 +197,7 @@ def test_constraint_threads_into_planner_and_writer():
     council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
     council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
     council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
-    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
 
@@ -283,7 +283,7 @@ def test_prose_pass_variance_sees_full_story_and_gets_canon():
     council.variance.run = MagicMock(
         return_value={"agent": "VarianceReviewerAgent", "output": "var"})
     council.planner.plan_revision_prose = MagicMock(
-        return_value={"agent": "PlanningAgent", "output": "revplan"})
+        return_value={"agent": "PlanningAgent", "output": "revplan", "revision": {"marker": "revplan"}})
     council.writer.revise = MagicMock(
         return_value={"agent": "WriterAgent", "output": "final", "revised_sections": None})
 
@@ -312,7 +312,7 @@ def _secondary_council():
     council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
     council.strangeness.run = MagicMock(return_value={"output": "st", "agent": "S"})
     council.sensory.run = MagicMock(return_value={"output": "se", "agent": "Se"})
-    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nFinal.",
         "revised_sections": None})
@@ -405,7 +405,7 @@ def _length_council(plan_output):
     council.consistency.run = MagicMock(return_value={"output": "c", "agent": "C"})
     council.ai_checker.run = MagicMock(return_value={"output": "a", "agent": "A"})
     council.engine.run = MagicMock(return_value={"output": "e", "agent": "E"})
-    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+    council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
     council.writer.revise = MagicMock(return_value={
         "agent": "WriterAgent", "output": "final", "revised_sections": None})
     return council
@@ -477,7 +477,7 @@ def test_middle_plan_revision_is_canon_aware_whenever_a_canon_exists():
     for world_class, expected in ((wc.SECONDARY, True), (wc.NON_EARTH, True),
                                   (wc.EARTH, False)):
         council = WritingCouncil()
-        council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P"})
+        council.planner.plan_revision = MagicMock(return_value={"output": "rp", "agent": "P", "revision": {"marker": "rp"}})
         council.writer.revise = MagicMock(return_value={
             "agent": "WriterAgent", "output": "<<<SECTION 1>>>\nS.",
             "revised_sections": None})

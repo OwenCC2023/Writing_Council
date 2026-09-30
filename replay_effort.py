@@ -158,10 +158,14 @@ def replay(job: dict, agents: dict, effort: str) -> dict:
     name, method, kwargs = job["call"]
     agent = agents[name]
     usage = {}
-    orig_call, orig_first = agent._call_claude, agent._first_text
+    orig_call, orig_json, orig_first = (agent._call_claude, agent._call_claude_json,
+                                        agent._first_text)
 
     def forced(*a, **kw):
         return orig_call(*a, **{**kw, "effort": effort})
+
+    def forced_json(*a, **kw):
+        return orig_json(*a, **{**kw, "effort": effort})
 
     def recording(response):
         u = getattr(response, "usage", None)
@@ -169,13 +173,14 @@ def replay(job: dict, agents: dict, effort: str) -> dict:
         usage["output"] = getattr(u, "output_tokens", None)
         return orig_first(response)
 
-    agent._call_claude, agent._first_text = forced, recording
+    agent._call_claude, agent._call_claude_json, agent._first_text = (
+        forced, forced_json, recording)
     try:
         started = datetime.now()
         output = getattr(agent, method)(**kwargs)["output"]
         seconds = (datetime.now() - started).total_seconds()
     finally:
-        del agent._call_claude, agent._first_text
+        del agent._call_claude, agent._call_claude_json, agent._first_text
     return {"output": output, "usage": usage, "seconds": seconds}
 
 

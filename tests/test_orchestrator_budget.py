@@ -20,9 +20,16 @@ _STORY = ("The fleet dropped out of the lane.\n\n"
 _BRIEF = "=== STORY BRIEF ===\nTITLE: T\nLENGTH: 900 words\nSYNOPSIS: S\n"
 
 
+def _fields(brief):
+    from agents.intake_agent import BRIEF_FIELDS
+    parsed = dict(l.split(': ', 1) for l in brief.splitlines()[1:] if ': ' in l)
+    return {name: parsed.get(name, '') for name in BRIEF_FIELDS}
+
+
 def _council():
     council = WritingCouncil()
-    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF})
+    council.intake.run = MagicMock(return_value={"agent": "IntakeAgent", "output": _BRIEF,
+                                                  "fields": _fields(_BRIEF)})
     council.planner.run = MagicMock(
         return_value={"agent": "PlanningAgent", "output": "<<<WORLD_CLASS: EARTH>>>\nplan"})
     council.sectionizer.run = MagicMock(
@@ -39,9 +46,9 @@ def _council():
     council.engine.run = MagicMock(return_value={"agent": "EngineReviewerAgent", "output": "e"})
     council.variance.run = MagicMock(
         return_value={"agent": "VarianceReviewerAgent", "output": "v"})
-    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp"})
+    council.planner.plan_revision = MagicMock(return_value={"agent": "PlanningAgent", "output": "rp", "revision": {"marker": "rp"}})
     council.planner.plan_revision_prose = MagicMock(
-        return_value={"agent": "PlanningAgent", "output": "pp"})
+        return_value={"agent": "PlanningAgent", "output": "pp", "revision": {"marker": "pp"}})
     council.peer_writer.run = MagicMock(return_value={"agent": "PeerWriterAgent", "output": "p"})
     council.editor.run = MagicMock(return_value={"agent": "EditorAgent", "output": "ed"})
     council.marketing.run = MagicMock(return_value={"agent": "MarketingAgent", "output": "m"})

@@ -19,7 +19,7 @@ from agents import (
     EngineReviewerAgent,
 )
 from agents.base_agent import INITIAL_DRAFT_MODEL, max_tokens_for
-from agents.intake_agent import IntakeAgent, parse_brief
+from agents.intake_agent import IntakeAgent
 from agents.sectionizer_agent import SectionizerAgent, sectionize
 from agents.writer_agent import INITIAL_WRITE_MAX_TOKENS
 from constraints import check_constraint
@@ -205,7 +205,7 @@ class WritingCouncil:
             brief_text = intake_result["output"]
 
             merged = self._merge_brief(
-                parse_brief(brief_text), idea=idea, world_rules=world_rules,
+                intake_result["fields"], idea=idea, world_rules=world_rules,
                 framework=framework, target_length=target_length, title=title,
                 filename_stem=Path(source_filename).stem if source_filename else "")
             idea = merged["idea"]
@@ -527,6 +527,7 @@ class WritingCouncil:
             )
             self._log_end(result, step=f"{label}.plan_revision_1")
             pre_write_plan = result["output"]
+            pre_write_revision = result["revision"]
 
             print(f"[{label}] Running WriterAgent (revise from middle plan)...")
             self._log_start(
@@ -534,7 +535,7 @@ class WritingCouncil:
                 f"revision_plan:\n{pre_write_plan}\n\nplan:\n{plan}\n\nstory:\n{story}",
             )
             write_result = self.writer.revise(
-                plan=plan, story=story, feedback=pre_write_plan,
+                plan=plan, story=story, revision=pre_write_revision,
                 model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
                 canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
                 max_tokens=write_max_tokens, target_length=target_length)
@@ -609,6 +610,7 @@ class WritingCouncil:
         )
         self._log_end(result, step=f"{label}.plan_revision_2")
         revision_plan = result["output"]
+        revision = result["revision"]
 
         # ---- Final 2: revise with revision plan ----
         print(f"[{label}] Running WriterAgent (final revise)...")
@@ -617,7 +619,7 @@ class WritingCouncil:
             f"revision_plan:\n{revision_plan}\n\nplan:\n{plan}\n\nstory:\n{story}",
         )
         result = self.writer.revise(
-            plan=plan, story=story, feedback=revision_plan,
+            plan=plan, story=story, revision=revision,
             model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
             max_tokens=write_max_tokens, target_length=target_length)
@@ -728,12 +730,12 @@ class WritingCouncil:
             variance_feedback=var_result["output"],
         )
         self._log_end(plan_result, step=f"{label}.plan_revision")
-        revision_plan = plan_result["output"]
+        revision = plan_result["revision"]
 
         print(f"[{label}] Running WriterAgent (prose revise)...")
         self._log_start(f"{label}.write", "WriterAgent")
         write_result = self.writer.revise(
-            plan=plan, story=story, feedback=revision_plan,
+            plan=plan, story=story, revision=revision,
             model=(INITIAL_DRAFT_MODEL if wc.wants_opus_writer(world_class) else None),
             canon_sheet=canon_sheet, world_bible=world_bible, constraint=constraint,
             max_tokens=max_tokens_for(target_length, INITIAL_WRITE_MAX_TOKENS),
