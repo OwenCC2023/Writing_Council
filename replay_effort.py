@@ -1,4 +1,4 @@
-"""Replay the ANALYSIS_EFFORT calls from a run log at several effort levels.
+"""Replay the analysis calls from a run log at several effort levels.
 
 Every run log holds each agent's output, and those outputs are the inputs of the
 calls that follow them: the latest WriterAgent output is the story, the latest
