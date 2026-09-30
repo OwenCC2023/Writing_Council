@@ -1,4 +1,4 @@
-from .base_agent import ANALYSIS_EFFORT, BaseAgent, DEFAULT_MODEL
+from .base_agent import BaseAgent, DEFAULT_MODEL
 from .world_calibration import with_canon
 
 # Two-sided band for concrete non-visual sensory details per section. The lower bound
@@ -7,6 +7,11 @@ from .world_calibration import with_canon
 # passes that produced prose where every paragraph carried a measurement.
 DENSITY_FLOOR = 6
 DENSITY_CEILING = 14
+# Replayed on identical input (replay_effort.py), `low` miscounted a thin section as
+# in-band and so forbade the additions it needed; `medium` counted it thin and also
+# caught hedge-words beyond the banned list. The other analysis calls showed no
+# difference and stay at the model default.
+SENSORY_EFFORT = "medium"
 
 SYSTEM_PROMPT_TEMPLATE = """\
 You are a sensory-density auditor for a non-Earth story. Alien worlds tempt a writer into \
@@ -65,5 +70,5 @@ class SensoryQuotaAgent(BaseAgent):
             "Report concrete-sensory density per section against the band, flag banned "
             "abstractions, and report register repetition across the manuscript."
         )
-        output = self._call_claude(system_prompt, user_prompt, effort=ANALYSIS_EFFORT)
+        output = self._call_claude(system_prompt, user_prompt, effort=SENSORY_EFFORT)
         return {"agent": "SensoryQuotaAgent", "output": output}

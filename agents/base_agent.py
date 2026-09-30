@@ -47,12 +47,6 @@ _EFFORT_BY_MODEL = {
 }
 _THINKING_DISABLED = {"type": "disabled"}
 
-# Effort for the Sonnet calls whose job is counting or synthesis rather than prose:
-# tallying one construction across a whole manuscript, holding a per-section density
-# band, and merging several reviewers into one fix list without dropping a finding.
-# `low` skips thinking on most requests, and those are the calls that need it.
-ANALYSIS_EFFORT = "medium"
-
 # Thinking counts toward max_tokens even though its text isn't returned, so a
 # budget sized for the prose alone would cut the story off. Headroom is only
 # billed when used.

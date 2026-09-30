@@ -41,8 +41,10 @@ billed — never start a real council run just to verify code; the tests mock th
   `medium` (set explicitly; the API default dropped from Opus 5's `high`), Sonnet 5.5
   adaptive at effort `low`, anything else (Haiku, a test override) keeps thinking disabled.
   `_call_claude(effort=...)` overrides the level (ignored on thinking-disabled models);
-  the counting/synthesis calls — Variance, Sensory, `plan_revision`, `plan_revision_prose`
-  — pass `ANALYSIS_EFFORT` (`medium`), since `low` skips thinking on most requests.
+  only `SensoryQuotaAgent` passes one (`SENSORY_EFFORT`, `medium`). Variance and both
+  `plan_revision` calls were replayed at `low` vs `medium` on identical inputs
+  (`replay_effort.py`, which rebuilds any analysis call's inputs from a run log) and stay
+  at `low`; Sensory at `low` miscounted a thin section as in-band.
   The 5.5 models also get `THINKING_HEADROOM` (16k) on `max_tokens` — thinking counts
   toward the limit — and server-side refusal fallback (`fallbacks: "default"`, beta
   `server-side-fallback-2026-07-01`). Both call methods go through `_send`, which

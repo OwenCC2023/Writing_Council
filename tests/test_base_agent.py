@@ -134,22 +134,21 @@ def test_effort_override_is_ignored_on_a_thinking_disabled_model():
     assert "output_config" not in kwargs
 
 
-def test_analysis_calls_run_at_analysis_effort():
+def test_only_sensory_raises_effort_among_the_analysis_calls():
     from unittest.mock import patch
-    from agents.base_agent import ANALYSIS_EFFORT
     from agents.planning_agent import PlanningAgent
-    from agents.sensory_agent import SensoryQuotaAgent
+    from agents.sensory_agent import SENSORY_EFFORT, SensoryQuotaAgent
     from agents.variance_agent import VarianceReviewerAgent
 
     calls = [
-        (VarianceReviewerAgent, lambda a: a.run(story="S")),
-        (SensoryQuotaAgent, lambda a: a.run(story="S")),
-        (PlanningAgent, lambda a: a.plan_revision(story="S", plan="P", feedbacks=["f"])),
+        (SensoryQuotaAgent, lambda a: a.run(story="S"), SENSORY_EFFORT),
+        (VarianceReviewerAgent, lambda a: a.run(story="S"), None),
+        (PlanningAgent, lambda a: a.plan_revision(story="S", plan="P", feedbacks=["f"]), None),
         (PlanningAgent, lambda a: a.plan_revision_prose(
-            story="S", plan="P", prose_feedback="p", consistency_feedback="c")),
+            story="S", plan="P", prose_feedback="p", consistency_feedback="c"), None),
     ]
-    for cls, invoke in calls:
+    for cls, invoke, expected in calls:
         agent = cls()
         with patch.object(agent, "_call_claude", return_value="out") as m:
             invoke(agent)
-        assert m.call_args.kwargs["effort"] == ANALYSIS_EFFORT, cls.__name__
+        assert m.call_args.kwargs.get("effort") == expected, cls.__name__

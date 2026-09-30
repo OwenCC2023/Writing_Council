@@ -1,6 +1,6 @@
 import re
 
-from .base_agent import ANALYSIS_EFFORT, BaseAgent, INITIAL_DRAFT_MODEL
+from .base_agent import BaseAgent, INITIAL_DRAFT_MODEL
 
 SYSTEM_PROMPT = """\
 You are a meticulous story architect. Your job is to take a raw idea and expand it into \
@@ -408,7 +408,7 @@ class PlanningAgent(BaseAgent):
             "Produce a structured revision plan using the exact format specified."
         )
         system_prompt = REVISION_PLAN_SYSTEM_PROMPT + (_REVISION_BUCKET_CLAUSE if canon_aware else "")
-        output = self._call_claude(system_prompt, user_prompt, effort=ANALYSIS_EFFORT)
+        output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def plan_revision_prose(self, story: str, plan: str,
@@ -453,7 +453,7 @@ class PlanningAgent(BaseAgent):
             "Produce the structured revision plan using the exact format specified."
         )
         system_prompt = PROSE_REVISION_PLAN_SYSTEM_PROMPT + (_PROSE_BUCKET_CLAUSE if canon_aware else "")
-        output = self._call_claude(system_prompt, user_prompt, effort=ANALYSIS_EFFORT)
+        output = self._call_claude(system_prompt, user_prompt)
         return {"agent": "PlanningAgent", "output": output}
 
     def fix_plan_length(self, plan: str, target_length: str, check: dict,
