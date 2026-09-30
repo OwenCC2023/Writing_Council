@@ -111,7 +111,8 @@ def build_jobs(entries: list, per_kind: int = 1, top_n: int = 5) -> list:
                          ("peer_writer", "editor", "marketing", "audience")]
             jobs.append({"kind": "plan_revision_1", "step": step, "logged": output,
                          "call": ("planner", "plan_revision",
-                                  dict(story=story, plan=plan, feedbacks=feedbacks))})
+                                  dict(story=story, plan=plan, feedbacks=feedbacks,
+                                       canon_aware=bool(canon)))})
             counts["plan_revision_1"] += 1
         elif leaf == "plan_revision_2" and want("plan_revision_2"):
             feedbacks = [since_write[k] for k in
