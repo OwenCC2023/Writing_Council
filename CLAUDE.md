@@ -31,8 +31,20 @@ billed — never start a real council run just to verify code; the tests mock th
   The prose-cleanup pass runs Consistency + AIFailure(prose) + `VarianceReviewerAgent`
   (`max_workers` 3) on every run.
 - `agents/` — one class per agent, all subclassing `agents/base_agent.py:BaseAgent`
-  (shared Anthropic client; `_call_claude` and `_call_claude_with_image`).
-  System prompts live as module-level string constants in each agent file.
+  (shared Anthropic client; `_call_claude`, `_call_claude_with_image`, and
+  `_call_claude_json`). System prompts live as module-level string constants in each
+  agent file.
+- **Structured outputs.** Anything Python parses comes back as a JSON schema
+  (`output_config.format`, via `_call_claude_json(system, user, schema)`), not as a text
+  format the prompt has to police: revision plans (`REVISION_PLAN_SCHEMA` /
+  `PROSE_REVISION_SCHEMA` in `planning_agent.py`), sectionizer anchors, and the intake
+  brief. A refusal raises `RefusalError` before any parse; a response cut off at
+  `max_tokens` or not valid JSON raises `StructuredOutputError` rather than returning a
+  partial dict (a plan truncated mid-list would silently drop the fixes after the cut).
+  Prompts describe the fields and keep every judgment rule; they no longer carry
+  format-protecting rules ("one line per section", "exact format", "no numbering").
+  Agents that need to log or display the result also return the rendered text as
+  `output`, so logs, the UI, and `replay_effort.py` are unchanged.
 - Model tiers (`agents/base_agent.py`): `DEFAULT_MODEL` (`claude-sonnet-5-5`) for
   planner/writer, `FEEDBACK_MODEL` (`claude-haiku-4-5`) for reviewers,
   `INITIAL_DRAFT_MODEL` (`claude-opus-5-5`) for the first plan + first write only.
@@ -60,7 +72,14 @@ billed — never start a real council run just to verify code; the tests mock th
 - `ai_writing_failure_modes.md` — taxonomy the `AIFailureCheckerAgent` reviews against;
   injected into its system prompts.
 - Drafts carry `<<<SECTION N>>>` markers so revisions can target sections (diff-style);
-  markers are stripped once at the very end of `run()`.
+  markers are stripped once at the very end of `run()`. `plan_revision` /
+  `plan_revision_prose` return `{"revision": <dict>, "output": <JSON for the log>}`
+  where the dict holds `structural_operations` (MOVE/MERGE), `section_revisions` (one
+  instruction per section — Python merges a section's split entries with `"; "` and
+  collapses whitespace, since the old line format silently kept only the last) and
+  `general_notes`; `WriterAgent.revise(revision=...)` consumes it directly. The prose
+  pass's schema has only `section_revisions`, so "no moves, no general notes" is enforced
+  by shape, not by prompt.
 - `document_writer.py` — manuscript-format .docx export under `story_outputs/<title>/`.
 - `server.py` + `static/index.html` — Flask UI. Single self-contained HTML file:
   inline CSS (dark/light via CSS custom properties on `body.light`) and inline JS.
@@ -104,7 +123,7 @@ material the model already knows.
   plan (which already holds any image WORLD DEDUCTION), not raw images. Injects
   `trope_blacklist.md` like `ai_writing_failure_modes.md`.
 - `PlanningAgent.revise_with_world_bible` (Opus) rewrites the plan to exploit the world
-  before the first write. Returns a full plan (not the `===` diff-ops format).
+  before the first write. Returns a full plan (not a revision-plan dict).
 - `WriterAgent` runs on Opus for **all** passes on NON-EARTH, with canon + bible +
   blacklist in context (`_world_block`). Reviewers get the **canon only**, never the bible.
 - Two Inner-loop reviewers (Sonnet), added to the checker fan-out only on NON-EARTH
@@ -222,9 +241,12 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
   fan-out, so the uploaded draft is the first draft the review/revise loops see.
 
 - `agents/intake_agent.py:IntakeAgent` (DEFAULT_MODEL) digests the source text into a
-  fixed-shape `=== STORY BRIEF ===` block (title, world-class guess, genre, setting,
-  world rules, characters, plot, structure, intent, length, synopsis); `parse_brief`
-  turns it back into a dict. Its `WORLD_CLASS_GUESS` is advisory only —
+  schema-constrained brief (`BRIEF_SCHEMA`: title, world-class guess + reason, genre,
+  setting, world rules, characters, plot, structure, intent, length, synopsis — so no
+  field can go missing). `run()` returns `fields` (keyed by `BRIEF_FIELDS`, which
+  `_merge_brief` reads) and `output`, the same `=== STORY BRIEF ===` block rendered by
+  `render_brief` for the planner, UI, and CLI. Its `WORLD_CLASS_GUESS` is an enum of the
+  three tiers and advisory only —
   `PlanningAgent` remains the sole authority for the `<<<WORLD_CLASS>>>` tag that trips
   the tier, on both rewrite paths.
 - The whole brief text reaches `PlanningAgent` (as `brief`, plus `source_story` and
@@ -236,7 +258,8 @@ instead of writing one from `idea`. `rewrite_mode` picks one of two paths:
 - On revise, `PLAN_EXISTING_ADDENDUM` overrides `CLASSIFY_ADDENDUM`'s NON-EARTH
   "more, smaller sections" rule: section count must follow the draft's own scene
   structure, or `agents/sectionizer_agent.py` can't map planned sections onto it.
-  `SectionizerAgent` (FEEDBACK_MODEL) returns one anchor phrase per section; Python
+  `SectionizerAgent` (FEEDBACK_MODEL) returns one anchor phrase per section as a JSON
+  array (`ANCHORS_SCHEMA`); Python
   (`insert_markers`) inserts the `<<<SECTION N>>>` markers deterministically — the
   prose is never re-emitted by the model, so it can't mutate. `fallback_sectionize`
   groups the draft by scene-break glyphs or blank lines if the anchors don't fit the
